@@ -2,6 +2,10 @@ cmake_minimum_required(VERSION 3.24)
 project(DroidMediaLink VERSION 0.1.0 LANGUAGES CXX)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
+if(WIN32)
+ # Keep Windows SDK min/max macros out of C++ standard-library expressions.
+ add_compile_definitions(NOMINMAX)
+endif()
 if(MSVC)
  # C++20 __VA_OPT__ requires the conforming preprocessor, even with /std:c++20.
  add_compile_options(/Zc:preprocessor /utf-8)
