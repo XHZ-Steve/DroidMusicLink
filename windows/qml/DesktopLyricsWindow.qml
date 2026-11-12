@@ -2,10 +2,13 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
+import "Icons.js" as Icons
 Window {
  id:window;objectName:"desktop";transientParent:null
  required property var controller
  property int settingsRevision:0
+ signal settingsRequested()
+ FontLoader{id:desktopIcons;source:"qrc:/icons/lucide.ttf"}
  function pref(key,fallback){var revision=settingsRevision;return controller.setting(key,fallback)}
  property bool foregroundFullscreen:false
  property bool requestedVisible:false
@@ -31,7 +34,7 @@ Window {
  visible:requestedVisible&&policyAllows;width:800;height:260;minimumWidth:280;minimumHeight:100;x:200;y:600
  Component.onCompleted:{x=controller.setting("lyricsX",200);y=controller.setting("lyricsY",600);width=controller.setting("desktopLyrics/windowWidth",800);height=controller.setting("desktopLyrics/windowHeight",260);positionLoaded=true;Qt.callLater(clampPosition)}
  color:"transparent";title:qsTr("Desktop lyrics")
- flags:Qt.Tool|Qt.FramelessWindowHint|Qt.NoDropShadowWindowHint|(pref("overlayTopmost",true)?Qt.WindowStaysOnTopHint:0)|(clickThrough?Qt.WindowTransparentForInput:0)
+ flags:Qt.Tool|Qt.FramelessWindowHint|Qt.NoDropShadowWindowHint|(pref("desktopLyrics/topmost",true)?Qt.WindowStaysOnTopHint:0)|(clickThrough?Qt.WindowTransparentForInput:0)
  opacity:Math.max(.1,Math.min(1,pref("desktopLyrics/opacity",1)))
  onClosing:function(event){event.accepted=false;hideRequested()}
  onVisibleChanged:{if(visible)Qt.callLater(clampPosition);else{hoverLatched=false;hoverExit.stop()}}
@@ -51,8 +54,8 @@ Window {
  // This body never changes geometry when editing controls appear.
  Loader {id:bodyLoader;objectName:"desktopLyricBody";anchors.fill:parent;anchors.margins:12;active:window.visible
   sourceComponent:LyricView {
-   controller:window.controller;settingsRevision:window.settingsRevision;settingsPrefix:"desktopLyrics";compact:true
-   compactLines:window.pref("desktopLyrics/mode","two")==="single"||window.height<fontSize*4.5?1:2
+   controller:window.controller;settingsRevision:window.settingsRevision;settingsPrefix:"desktopLyrics";compact:window.pref("desktopLyrics/mode","auto")==="single"
+   compactLines:1;interactive:false;centerCurrentText:true;configuration:({focus:.5})
    textColor:"#fff8f5";inactiveColor:"#bdc5d5";centered:true;motion:window.pref("motion",true)
    onSeekRequested:function(position){window.controller.command("seek",position)}
   }
@@ -62,19 +65,20 @@ Window {
  Timer{id:hoverExit;interval:500;onTriggered:window.hoverLatched=false}
  Rectangle {anchors.fill:parent;radius:16;color:"transparent";border.width:1;border.color:"#7099afc5";opacity:window.controlsVisible?1:0;Behavior on opacity{NumberAnimation{duration:160}}}
  component EditButton:Button {
-  id:button;implicitHeight:32;implicitWidth:34;leftPadding:8;rightPadding:8;hoverEnabled:true;Accessible.name:text
+  id:button;font.family:"Segoe UI Variable Text";font.pixelSize:14;implicitHeight:32;implicitWidth:Math.max(30,contentItem.implicitWidth+10);leftPadding:5;rightPadding:5;hoverEnabled:true;Accessible.name:text
   background:Rectangle{radius:8;color:button.down?"#35d4e4fa":button.hovered?"#20d4e4fa":"transparent";border.width:button.visualFocus?2:0;border.color:"#b8d5df"}
-  contentItem:Text{text:button.text;color:"#eef2f5";font.family:"Segoe UI Variable Text";font.pixelSize:14;font.weight:500;horizontalAlignment:Text.AlignHCenter;verticalAlignment:Text.AlignVCenter;renderType:Text.NativeRendering}
+  contentItem:Text{text:button.text;color:"#eef2f5";font:button.font;horizontalAlignment:Text.AlignHCenter;verticalAlignment:Text.AlignVCenter;renderType:Text.NativeRendering}
  }
  Item {id:bar;anchors.horizontalCenter:parent.horizontalCenter;y:6;width:Math.min(window.width-24,400);height:42;z:10
   visible:opacity>0;opacity:window.controlsVisible?1:0;Behavior on opacity{NumberAnimation{duration:160}}
   Rectangle{id:barBackdrop;anchors.fill:parent;visible:false;gradient:Gradient{GradientStop{position:0;color:"#344354"}GradientStop{position:1;color:"#1b2637"}}}
   GlassMaterial {anchors.fill:parent;sourceItem:barBackdrop;cornerRadius:13;dark:true;active:window.visible&&bar.visible;glassEnabled:window.pref("appearance/style","liquid")==="liquid";tintColor:"#233044";tintStrength:.25;fallbackColor:"#db253144"}
-  RowLayout {anchors.fill:parent;anchors.margins:4;spacing:4
+  RowLayout {anchors.fill:parent;anchors.margins:4;spacing:window.width<360?2:4
    EditButton{text:"-";Accessible.name:qsTr("Decrease font size");onClicked:window.controller.setSetting("desktopLyrics/fontSize",Math.max(16,window.pref("desktopLyrics/fontSize",36)-2))}
-   Label{text:String(window.pref("desktopLyrics/fontSize",36));color:"#eef2f5";horizontalAlignment:Text.AlignHCenter;Layout.preferredWidth:28;font.pixelSize:13}
+   Label{text:String(window.pref("desktopLyrics/fontSize",36));color:"#eef2f5";horizontalAlignment:Text.AlignHCenter;Layout.preferredWidth:24;font.pixelSize:13}
    EditButton{text:"+";Accessible.name:qsTr("Increase font size");onClicked:window.controller.setSetting("desktopLyrics/fontSize",Math.min(96,window.pref("desktopLyrics/fontSize",36)+2))}
    Item{Layout.fillWidth:true}
+   EditButton{text:Icons.glyph("settings");font.family:desktopIcons.name;font.pixelSize:16;Accessible.name:qsTr("Settings");ToolTip.visible:hovered;ToolTip.text:qsTr("Settings");onClicked:window.settingsRequested()}
    EditButton{text:qsTr("Lock");onClicked:{window.controller.setSetting("desktopClickThrough",true);window.editMode=false;window.hoverLatched=false}}
    EditButton{text:qsTr("Done");onClicked:{window.editMode=false;window.hoverLatched=false}}
    EditButton{text:"×";Accessible.name:qsTr("Close lyrics");onClicked:window.hideRequested()}

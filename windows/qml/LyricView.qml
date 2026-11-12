@@ -7,6 +7,7 @@ Item {
  required property var controller
  property int settingsRevision:0
  property string settingsPrefix:compact?"desktopLyrics":"lyrics"
+ readonly property bool desktop:settingsPrefix==="desktopLyrics"
  property var configuration:({})
  function option(key,fallback){var revision=settingsRevision;if(configuration&&configuration[key]!==undefined)return configuration[key];return controller&&typeof controller.setting==="function"?controller.setting(settingsPrefix+"/"+key,fallback):fallback}
  function colorOption(key,fallback){var value=option(key,"auto");return value==="auto"?fallback:value}
@@ -14,15 +15,17 @@ Item {
  property color textColor:"#fff8f5"
  property color inactiveColor:"#bdc5d5"
  property string fontFamily:option("fontFamily",type.displayFamily)
- property int fontSize:option("fontSize",compact?36:28)
+ property int fontSize:option("fontSize",desktop?36:28)
  property int scrollDuration:option("scrollDuration",420)
  property string easingCurve:option("easing","outCubic")
- property real focusPosition:option("focus",compact?.5:.45)
- property real lineSpacing:option("lineSpacing",compact?.22:.65)
+ property real focusPosition:option("focus",desktop?.5:.45)
+ property real lineSpacing:option("lineSpacing",desktop?.22:.65)
  property real activeScale:option("activeScale",1.10)
- property real inactiveOpacity:option("futureOpacity",compact?.42:.5)
+ property real inactiveOpacity:option("futureOpacity",desktop?.42:.5)
  property string highlightMode:option("highlight","word")
  property bool motion:true
+ property bool interactive:true
+ property bool centerCurrentText:false
  property bool compact:false
  property int compactLines:2
  property bool showTranslation:option("translation",true)
@@ -32,10 +35,10 @@ Item {
  property bool shadow:option("shadow",false)
  property bool centered:compact
  readonly property string alignment:option("alignment",centered?"center":"left")
- readonly property string longLine:option("longLine",compact?"shrink":"wrap")
+ readonly property string longLine:option("longLine",desktop?"shrink":"wrap")
  readonly property real reserveScale:Math.max(1,activeScale,option("inactiveScale",1))
- readonly property int fontWeight:option("fontWeight",compact?450:500)
- readonly property int activeWeight:option("activeWeight",compact?500:600)
+ readonly property int fontWeight:option("fontWeight",desktop?450:500)
+ readonly property int activeWeight:option("activeWeight",desktop?500:600)
  readonly property real inkPadding:Math.ceil(Math.max(5,outlineWidth+2,shadow?option("shadowBlur",6)+Math.abs(option("shadowOffset",2)):0,option("glow",false)||option("wordGlow",false)?option("glowRadius",8):0))
  readonly property int rendering:option("rendering","curve")==="native"?Text.NativeRendering:option("rendering","curve")==="qt"?Text.QtRendering:Text.CurveRendering
  readonly property var rows:controller?controller.lyrics:[]
@@ -95,11 +98,12 @@ Item {
   readonly property var row:modelData
   readonly property bool selected:index===view.line
   readonly property bool past:index<view.line
+  readonly property real primaryCenterOffset:primary.height/2
   // Delegate measurement can finish after the initial follow request. Re-anchor
   // only on layout changes, never on each media-clock tick.
   onYChanged:if(selected)Qt.callLater(timeline.follow)
   onHeightChanged:if(selected)Qt.callLater(timeline.follow)
-  readonly property real layoutWidth:Math.max(1,(Math.min(timeline.width,view.option("maxWidth",view.compact?1800:1000))/view.reserveScale)-view.inkPadding*2-8)
+  readonly property real layoutWidth:Math.max(1,(Math.min(timeline.width,view.option("maxWidth",view.desktop?1800:1000))/view.reserveScale)-view.inkPadding*2-8)
   readonly property font face:Qt.font({family:type.resolvedFamily(rowItem.row.text||"",view.fontFamily),pixelSize:view.fontSize,weight:selected?view.activeWeight:view.fontWeight,letterSpacing:view.option("letterSpacing",0),contextFontMerging:true,preferTypoLineMetrics:true,hintingPreference:Font.PreferNoHinting})
   readonly property var chunks:view.longLine==="elide"?[{text:row.text||"",time:row.time||0,end:row.end||0}]:row.words&&row.words.length?row.words:view.plainChunks(row)
   readonly property bool wordTimed:view.longLine!=="elide"&&!!row.words&&row.words.length>0
@@ -110,7 +114,7 @@ Item {
   readonly property real flowWidth:view.longLine==="wrap"?Math.min(layoutWidth,naturalWidth):naturalWidth
   readonly property real sourceWidth:view.longLine==="elide"?Math.min(layoutWidth,naturalWidth):flowWidth
   readonly property color baseColor:selected?view.colorOption("unsungColor",view.inactiveColor):view.untimed?view.textColor:past?view.colorOption("pastColor",view.inactiveColor):view.colorOption("futureColor",view.inactiveColor)
-  readonly property real stateOpacity:selected||view.untimed?view.option("activeOpacity",1):view.line<0?.78:Math.min(1,(past?view.option("pastOpacity",view.compact?.5:.58):view.inactiveOpacity)+view.option("nearbyEmphasis",.12)/Math.max(1,Math.abs(index-view.line)))
+  readonly property real stateOpacity:selected||view.untimed?view.option("activeOpacity",1):view.line<0?.78:Math.min(1,(past?view.option("pastOpacity",view.desktop?.5:.58):view.inactiveOpacity)+view.option("nearbyEmphasis",.12)/Math.max(1,Math.abs(index-view.line)))
   readonly property real visualScale:(selected?view.activeScale:view.option("inactiveScale",1))*shrink
   readonly property real centerY:y-timeline.contentY+height/2
   readonly property real fade:view.compact||view.edgeLayer?1:Math.pow(Math.max(0,Math.min(1,view.topFade>0?centerY/view.topFade:1,view.bottomFade>0?(timeline.height-centerY)/view.bottomFade:1)),view.option("fadeStrength",1))
@@ -156,6 +160,7 @@ Item {
    Text {
     visible:view.showTranslation&&(rowItem.row.translation||"").length>0
     width:parent.width;topPadding:view.option("translationSpacing",6)
+    x:horizontalAlignment===Text.AlignLeft&&view.alignment==="left"?view.inkPadding*primary.scale:horizontalAlignment===Text.AlignRight&&view.alignment==="right"?-view.inkPadding*primary.scale:0
     text:rowItem.row.translation||"";textFormat:Text.PlainText;wrapMode:Text.Wrap
     horizontalAlignment:view.align(view.option("translationAlignment","inherit")==="inherit"?view.alignment:view.option("translationAlignment","inherit"))
     color:view.colorOption("translationColor",view.textColor);opacity:view.option("translationOpacity",.78)
@@ -165,6 +170,7 @@ Item {
    Text {
     visible:view.showRomanization&&(rowItem.row.romanization||"").length>0
     width:parent.width;topPadding:view.option("romanizationSpacing",6)
+    x:horizontalAlignment===Text.AlignLeft&&view.alignment==="left"?view.inkPadding*primary.scale:horizontalAlignment===Text.AlignRight&&view.alignment==="right"?-view.inkPadding*primary.scale:0
     text:rowItem.row.romanization||"";textFormat:Text.PlainText;wrapMode:Text.Wrap
     horizontalAlignment:view.align(view.option("romanizationAlignment","inherit")==="inherit"?view.alignment:view.option("romanizationAlignment","inherit"))
     color:view.colorOption("romanizationColor",view.textColor);opacity:view.option("romanizationOpacity",.62)
@@ -172,7 +178,7 @@ Item {
     lineHeight:view.option("romanizationLineHeight",1.2);renderType:view.rendering;renderTypeQuality:104
    }
   }
-  TapHandler {enabled:!view.compact&&!view.untimed;gesturePolicy:TapHandler.DragThreshold;onTapped:{if(!timeline.moving&&!timeline.dragging){view.seekRequested(rowItem.row.time);view.recover()}}}
+  TapHandler {enabled:view.interactive&&!view.compact&&!view.untimed;gesturePolicy:TapHandler.DragThreshold;onTapped:{if(!timeline.moving&&!timeline.dragging){view.seekRequested(rowItem.row.time);view.recover()}}}
  }
  ListView {
   id:timeline;objectName:"lyricTimeline";anchors.fill:parent
@@ -191,15 +197,15 @@ Item {
   boundsBehavior:view.option("bounds","bounce")==="stop"?Flickable.StopAtBounds:Flickable.DragAndOvershootBounds
   maximumFlickVelocity:view.option("inertia",2500);flickDeceleration:view.option("deceleration",1800)
   rebound:Transition{NumberAnimation{properties:"x,y";duration:view.option("bounceDuration",240);easing.type:Easing.OutCubic}}
-  interactive:!view.compact;flickableDirection:Flickable.VerticalFlick
+  interactive:view.interactive&&!view.compact;flickableDirection:Flickable.VerticalFlick
   function manual(){scrollMotion.stop();userScrolling=true;resumeFollow.stop()}
   function follow(){
    const i=view.line
    if(i<0||i>=count||userScrolling||!view.active||!view.option("autoScroll",true))return
    const row=itemAtIndex(i)
    if(!row){positionViewAtIndex(i,ListView.Center);Qt.callLater(follow);return}
-   const focus=view.compact?(view.compactLines===1?.5:.18):view.focusPosition
-   const target=row.y-height*focus+(!view.compact||view.compactLines===1?row.height/2:0)
+   const focus=view.centerCurrentText?.5:view.compact?(view.compactLines===1?.5:.18):view.focusPosition
+   const target=row.y-height*focus+(view.centerCurrentText?row.primaryCenterOffset:!view.compact||view.compactLines===1?row.height/2:0)
    if(Math.abs(target-contentY)<.5)return
    scrollMotion.stop()
    if(view.motion&&positioned){scrollMotion.from=contentY;scrollMotion.to=target;scrollMotion.duration=view.scrollDuration;scrollMotion.start()}else contentY=target
@@ -211,11 +217,11 @@ Item {
   onHeightChanged:Qt.callLater(follow)
   delegate:Line{}
   NumberAnimation{id:scrollMotion;target:timeline;property:"contentY";duration:view.scrollDuration;easing.type:view.easingCurve==="linear"?Easing.Linear:view.easingCurve==="inOutCubic"?Easing.InOutCubic:view.easingCurve==="outQuint"?Easing.OutQuint:Easing.OutCubic}
-  WheelHandler {enabled:!view.compact;target:null;acceptedDevices:PointerDevice.Mouse
+  WheelHandler {enabled:view.interactive&&!view.compact;target:null;acceptedDevices:PointerDevice.Mouse
    onWheel:function(event){timeline.manual();timeline.cancelFlick();const delta=(event.pixelDelta.y||event.angleDelta.y/120*view.fontSize*2)*view.option("wheelSensitivity",1.4);const target=Math.max(-timeline.topMargin,Math.min(timeline.contentHeight-timeline.height+timeline.bottomMargin,timeline.contentY-delta));scrollMotion.from=timeline.contentY;scrollMotion.to=target;scrollMotion.duration=Math.min(200,view.scrollDuration);scrollMotion.start();resumeFollow.restart();event.accepted=true}
   }
   Timer{id:resumeFollow;interval:view.option("recoveryDelay",2400);onTriggered:view.recover()}
-  ScrollBar.vertical:ScrollBar{visible:!view.compact;policy:ScrollBar.AsNeeded;implicitWidth:4;background:Item{}
+  ScrollBar.vertical:ScrollBar{visible:view.interactive&&!view.compact;policy:ScrollBar.AsNeeded;implicitWidth:4;background:Item{}
  contentItem:Rectangle{radius:2;color:view.inactiveColor;opacity:.25}}
  }
 }

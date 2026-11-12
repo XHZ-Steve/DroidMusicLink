@@ -11,6 +11,9 @@ Item {
     property bool motion: true
     property int transitionDuration:340
     property int front: 0
+    property int retryAttempts:0
+    Timer{id:reloadRetry;interval:Math.min(4000,300*Math.pow(2,cover.retryAttempts));onTriggered:{const next=cover.front===0?b:a;next.source="";cover.load()}}
+    function retryFailed(){if(retryAttempts>=3)return;++retryAttempts;reloadRetry.restart()}
     property url pending
     property real blend:1
     readonly property bool ready:a.status===Image.Ready||b.status===Image.Ready
@@ -28,15 +31,15 @@ Item {
         if(next.source===source && next.status===Image.Ready)present(front===0?1:0)
         else next.source=source
     }
-    onSourceChanged:load()
+    onSourceChanged:{retryAttempts=0;reloadRetry.stop();load()}
     // Keep the outgoing image opaque underneath; opposing alpha animations
     // would expose the background and darken the cover halfway through a fade.
     Item{id:artworkContent;anchors.fill:parent;visible:false
     Image {id:a;anchors.fill:parent;asynchronous:true;retainWhileLoading:true;fillMode:Image.PreserveAspectFit;visible:cover.front===0||cover.blend<1;z:cover.front===0?1:0;opacity:cover.front===0?cover.blend:1
-        onStatusChanged:if(status===Image.Ready && source===cover.pending)cover.present(0)
+        onStatusChanged:if(status===Image.Ready && source===cover.pending){cover.retryAttempts=0;reloadRetry.stop();cover.present(0)}else if(status===Image.Error&&source===cover.pending)cover.retryFailed()
     }
     Image {id:b;anchors.fill:parent;asynchronous:true;retainWhileLoading:true;fillMode:Image.PreserveAspectFit;visible:cover.front===1||cover.blend<1;z:cover.front===1?1:0;opacity:cover.front===1?cover.blend:1
-        onStatusChanged:if(status===Image.Ready && source===cover.pending)cover.present(1)
+        onStatusChanged:if(status===Image.Ready && source===cover.pending){cover.retryAttempts=0;reloadRetry.stop();cover.present(1)}else if(status===Image.Error&&source===cover.pending)cover.retryFailed()
     }
     }
     MultiEffect {anchors.fill:parent;source:artworkContent;visible:cover.ready;shadowEnabled:true;shadowColor:Qt.rgba(cover.ambientColor.r*.32,cover.ambientColor.g*.32,cover.ambientColor.b*.32,.34);shadowBlur:.8;shadowVerticalOffset:12;shadowHorizontalOffset:0;shadowScale:1.025;autoPaddingEnabled:true;blurMax:32}

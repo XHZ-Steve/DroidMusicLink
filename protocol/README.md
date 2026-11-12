@@ -46,10 +46,25 @@ and handle unknown duration. `ping`/`pong` provide liveness, not progress pollin
 
 Reserved event types include `capabilities`, `session_changed`,
 `metadata_changed`, `artwork_info`, `playback_state`, `position_anchor`,
-`volume_state`, `available_commands`, `lyrics_available`, `lyrics_payload`.
+`available_commands`, `lyrics_available`, `lyrics_payload`.
 Implementations must not claim these extensions until negotiated.
 
 Errors use stable names: `unauthorized`, `invalid_message`, `unsupported_version`,
 `pairing_expired`, `pairing_rejected`, `rate_limited`, `unsupported_command`,
 `duplicate_request`, `no_session`, `command_failed`. A malformed or oversized
 message may close the connection. Changed certificates require re-pairing.
+
+`get_snapshot` is an authenticated PC-to-phone request for a refreshed session
+snapshot (including a bounded artwork retry). It has an empty payload. It does
+not authorize media control and is subject to the connection's message limits.
+
+`volume_state` carries actual `volume`, `maxVolume`, and updated `commands`
+without repeating the cover or an old playback-position anchor. A volume
+`command_result` also includes the read-back volume fields; delayed device
+changes follow as `volume_state` events.
+
+After authentication the phone advertises `volume_state` and `get_snapshot` in
+a `capabilities` payload's `features` array. The PC responds with its supported
+features. Volume deltas are used only for peers that advertise support; older
+PCs receive full snapshots with a fresh playback anchor. Cover snapshot retries
+are requested only when the phone advertises `get_snapshot`.

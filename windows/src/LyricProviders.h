@@ -32,6 +32,8 @@ public:
  std::function<void()> changed;
  static QStringList ids();
  static double matchScore(const LyricTrack &track,const LyricCandidate &candidate,bool strict=true);
+ static double defaultMatchScore(const LyricTrack &track,const LyricCandidate &candidate);
+ static QString baseTitle(QString title);
  static QString decodeLocal(QByteArray bytes);
 private:
  QNetworkAccessManager *m_network;quint64 m_epoch=0;

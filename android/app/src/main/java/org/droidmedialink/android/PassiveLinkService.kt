@@ -57,7 +57,7 @@ class PassiveLinkService : Service() {
  }
  private fun stopNetwork() {
   registration?.let { runCatching { getSystemService(NsdManager::class.java).unregisterService(it) } };registration=null
-  server?.let { runCatching { it.stop(500) } };server=null;Hub.broadcast=null;Hub.revoke=null;Hub.connected.value=emptySet();Hub.pending.value=null
+  server?.let { runCatching { it.stop(500) } };server=null;Hub.broadcast=null;Hub.broadcastVolume=null;Hub.revoke=null;Hub.connected.value=emptySet();Hub.pending.value=null
  }
  override fun onStartCommand(intent:Intent?,flags:Int,startId:Int):Int {
   if(intent?.action=="stop") { Hub.set("serviceEnabled",false);stopSelf();return START_NOT_STICKY }
@@ -67,6 +67,7 @@ class PassiveLinkService : Service() {
  override fun onDestroy() { runCatching { getSystemService(ConnectivityManager::class.java).unregisterNetworkCallback(networkCallback) };stopNetwork();mediaTracker?.stop();mediaTracker=null;Hub.running.value=false;super.onDestroy() }
  inner class LinkServer(address:InetSocketAddress):WebSocketServer(address,listOf(Draft_6455(listOf(org.java_websocket.extensions.DefaultExtension()),listOf(org.java_websocket.protocols.Protocol("")),524288))) {
   private val authenticated=ConcurrentHashMap<WebSocket,String>()
+  private val peerFeatures=ConcurrentHashMap<WebSocket,Set<String>>()
   private val seen=ConcurrentHashMap<WebSocket,ReplayWindow>()
   private val attempts=ConcurrentHashMap<String,Pair<Long,Int>>()
   private val requestIds=ConcurrentHashMap<String,ReplayWindow>()
@@ -77,6 +78,7 @@ class PassiveLinkService : Service() {
   override fun onStart() {
    Hub.revoke={ id -> authenticated.entries.filter { it.value==id }.forEach { authenticated.remove(it.key);it.key.close(1008,"authorization_revoked") };Hub.connected.value=authenticated.values.toSet() }
    Hub.broadcast={ data -> authenticated.keys.forEach { send(it,"session_snapshot",data) } }
+   Hub.broadcastVolume={ data -> authenticated.keys.forEach { if(peerFeatures[it]?.contains("volume_state")==true)send(it,"volume_state",data)else send(it,"session_snapshot",Hub.media.value) } }
    val nsd=getSystemService(NsdManager::class.java)
    registration=object:NsdManager.RegistrationListener {
     override fun onServiceRegistered(info:NsdServiceInfo) {}
@@ -91,7 +93,7 @@ class PassiveLinkService : Service() {
    send(conn,"hello",JSONObject().put("name",Build.MODEL).put("deviceId",store.fingerprint).put("certificateFingerprint",store.fingerprint))
    handler.postDelayed({ if(conn.isOpen && !authenticated.containsKey(conn))conn.close(1008,"authentication_timeout") },120000)
   }
-  override fun onClose(conn:WebSocket,code:Int,reason:String,remote:Boolean) { challenges.remove(conn);authenticated.remove(conn);seen.remove(conn);opened.remove(conn);rates.remove(conn);Hub.connected.value=authenticated.values.toSet();handler.post { if(pendingOwner===conn) { Hub.pending.value=null;pendingOwner=null } } }
+  override fun onClose(conn:WebSocket,code:Int,reason:String,remote:Boolean) { challenges.remove(conn);authenticated.remove(conn);peerFeatures.remove(conn);seen.remove(conn);opened.remove(conn);rates.remove(conn);Hub.connected.value=authenticated.values.toSet();handler.post { if(pendingOwner===conn) { Hub.pending.value=null;pendingOwner=null } } }
   override fun onError(conn:WebSocket?,ex:Exception) { if(conn==null) { Hub.error.value=getString(R.string.network_error) } }
   private fun send(c:WebSocket,type:String,payload:JSONObject) { if(c.isOpen)runCatching { c.send(JSONObject().put("protocolVersion",1).put("messageId",UUID.randomUUID().toString()).put("timestamp",System.currentTimeMillis()).put("type",type).put("payload",payload).toString()) } }
   private fun error(c:WebSocket,code:String) = send(c,"error",JSONObject().put("code",code))
@@ -148,7 +150,21 @@ class PassiveLinkService : Service() {
      "auth" -> {
       val clientId=payload.getString("clientId");val token=payload.getString("token")
       if(!store.authenticate(clientId,token)) { error(conn,"unauthorized");conn.close(1008,"unauthorized");return }
-      store.touch(clientId);authenticated[conn]=clientId;Hub.connected.value=authenticated.values.toSet();send(conn,"auth_result",JSONObject().put("authenticated",true));send(conn,"session_snapshot",Hub.media.value)
+      store.touch(clientId);authenticated[conn]=clientId;Hub.connected.value=authenticated.values.toSet();send(conn,"auth_result",JSONObject().put("authenticated",true));send(conn,"capabilities",JSONObject().put("features",JSONArray(listOf("volume_state","get_snapshot"))));send(conn,"session_snapshot",Hub.media.value)
+     }
+     "capabilities" -> {
+      val client=authenticated[conn]
+      if(client==null||!store.read().has(client)){error(conn,"unauthorized");return}
+      val values=payload.optJSONArray("features")?:JSONArray()
+      peerFeatures[conn]=(0 until minOf(16,values.length())).map { values.optString(it) }.filter { it=="volume_state"||it=="get_snapshot" }.toSet()
+     }
+     "get_snapshot" -> {
+      val client=authenticated[conn]
+      if(client==null||!store.read().has(client)){error(conn,"unauthorized");return}
+      handler.post {
+       if(authenticated[conn]!=client||!store.read().has(client)){error(conn,"unauthorized");return@post}
+       val refresh=Hub.refreshMedia;if(refresh!=null)refresh()else send(conn,"session_snapshot",Hub.media.value)
+      }
      }
      "command_request" -> {
       val client=authenticated[conn]
@@ -160,7 +176,7 @@ class PassiveLinkService : Service() {
       handler.post {
        if(authenticated[conn]!=client || !store.read().has(client)) { error(conn,"unauthorized");return@post }
        val failure=Hub.control?.invoke(command,payload) ?: if(Hub.control==null) "no_session" else null
-       send(conn,"command_result",JSONObject().put("requestId",requestId).put("success",failure==null).apply { if(failure!=null)put("error",failure) })
+       send(conn,"command_result",JSONObject().put("requestId",requestId).put("success",failure==null).apply { if(failure!=null)put("error",failure);if(command=="volume"){put("volume",Hub.media.value.optInt("volume"));put("maxVolume",Hub.media.value.optInt("maxVolume"))} })
       }
      }
      else -> error(conn,"unknown_type")

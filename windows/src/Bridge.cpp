@@ -60,15 +60,16 @@ Bridge::Bridge(QObject *parent):QObject(parent),m_status(tr("Disconnected")){
  });
  connect(&m_socket,&QWebSocket::connected,this,[this]{
   const auto cert=m_socket.sslConfiguration().peerCertificate();m_observedPin=QString::fromLatin1(cert.digest(QCryptographicHash::Sha256).toHex());if(cert.isNull()){disconnectDevice();return;}
-  m_backoff=0;m_lastPong.start();m_heartbeat.start(15000);
+  m_backoff=0;m_peerFeatures.clear();m_artworkRetryAttempts=0;m_lastPong.start();m_heartbeat.start(15000);
   if(!m_pin.isEmpty()&&m_observedPin==m_pin&&!token().isEmpty()){m_authSent=true;setStatus(tr("Authenticating"));send("auth",{{"clientId",m_settings.value("identity/clientId").toString()},{"token",QString::fromUtf8(token())}});}
   else {if(!m_pin.isEmpty()&&m_observedPin!=m_pin)emit notification(tr("Device certificate changed. Compare the code on your phone again."));beginPairing();}
  });
  connect(&m_socket,&QWebSocket::textMessageReceived,this,&Bridge::receive);
- connect(&m_socket,&QWebSocket::disconnected,this,[this]{m_online=false;m_authSent=false;m_heartbeat.stop();if(m_pairing)m_manual=true;clearPairing();m_pending.clear();emit changed();updateNative();if(!m_manual){setStatus(tr("Reconnecting"));retry();}});
+ connect(&m_socket,&QWebSocket::disconnected,this,[this]{m_online=false;m_authSent=false;m_artworkRetry.stop();m_heartbeat.stop();if(m_pairing)m_manual=true;clearPairing();m_pending.clear();emit changed();updateNative();if(!m_manual){setStatus(tr("Reconnecting"));retry();}});
  connect(&m_socket,&QWebSocket::errorOccurred,this,[this](QAbstractSocket::SocketError){setStatus(tr("Connection failed: %1").arg(m_socket.errorString()));if(!m_manual)retry();});
  m_pairTimeout.setSingleShot(true);connect(&m_pairTimeout,&QTimer::timeout,this,[this]{if(m_pairing){cancelPairing();setStatus(tr("Pairing expired"));}});
  connect(&m_progress,&QTimer::timeout,this,[this]{emit progressChanged();updateLyricClock();});m_progress.start(250);
+ m_artworkRetry.setSingleShot(true);connect(&m_artworkRetry,&QTimer::timeout,this,[this]{if(!m_online||!m_peerFeatures.contains("get_snapshot")||!m_artwork.isEmpty()||title().isEmpty())return;send("get_snapshot");++m_artworkRetryAttempts;const int delays[]={800,1800,4000,8000};if(m_artworkRetryAttempts<4)m_artworkRetry.start(delays[m_artworkRetryAttempts]);});
  m_lyricClock.setTimerType(Qt::PreciseTimer);m_lyricClock.setInterval(16);connect(&m_lyricClock,&QTimer::timeout,this,[this]{updateLyricClock();});
  connect(this,&Bridge::changed,this,&Bridge::updateLyricClock);connect(this,&Bridge::settingsChanged,this,&Bridge::updateLyricClock);
  connect(&m_heartbeat,&QTimer::timeout,this,[this]{if(m_lastPong.elapsed()>45000){m_socket.abort();return;}send("ping");const auto now=QDateTime::currentMSecsSinceEpoch();for(auto i=m_pending.begin();i!=m_pending.end();){if(now-i.value()>8000){emit notification(tr("Command timed out"));i=m_pending.erase(i);}else ++i;}});
@@ -105,7 +106,7 @@ void Bridge::connectDevice(QString url,QString,QString){
  if(m_url==target.toString()&&(m_socket.state()==QAbstractSocket::ConnectingState||m_socket.state()==QAbstractSocket::ConnectedState))return;
  m_manual=true;m_retry.stop();m_socket.abort();clearPairing();m_online=false;m_url=target.toString();m_seen.clear();m_observedPin.clear();m_pin=m_settings.value(deviceKey(m_url)+"/fingerprint").toString();m_deviceId.clear();m_deviceName=target.host();m_manual=false;setStatus(tr("Connecting"));m_socket.open(target);
 }
-void Bridge::disconnectDevice(){m_manual=true;m_retry.stop();m_heartbeat.stop();clearPairing();m_socket.close();m_online=false;setStatus(tr("Disconnected"));updateNative();}
+void Bridge::disconnectDevice(){m_artworkRetry.stop();m_manual=true;m_retry.stop();m_heartbeat.stop();clearPairing();m_socket.close();m_online=false;setStatus(tr("Disconnected"));updateNative();}
 void Bridge::retry(){if(m_retry.isActive()||!setting("connection/autoReconnect",true).toBool())return;m_retry.start(qMin(60000,1000*(1<<qMin(m_backoff++,6)))+int(QRandomGenerator::global()->bounded(800)));}
 void Bridge::send(QString type,QJsonObject payload){if(m_socket.state()!=QAbstractSocket::ConnectedState)return;QJsonObject e{{"protocolVersion",1},{"messageId",QUuid::createUuid().toString(QUuid::WithoutBraces)},{"timestamp",QDateTime::currentMSecsSinceEpoch()},{"type",type},{"payload",payload}};m_socket.sendTextMessage(QString::fromUtf8(QJsonDocument(e).toJson(QJsonDocument::Compact)));}
 void Bridge::receive(QString message){if(message.toUtf8().size()>4*1024*1024){m_socket.close();return;}QJsonParseError error;const auto doc=QJsonDocument::fromJson(message.toUtf8(),&error);if(error.error!=QJsonParseError::NoError||!doc.isObject())return;const auto e=doc.object();if(e.value("protocolVersion").toInt()!=1){setStatus(tr("Incompatible protocol"));m_manual=true;m_socket.close();return;}if(!e.value("messageId").isString()||e.value("messageId").toString().isEmpty()||!e.value("timestamp").isDouble()||!e.value("payload").isObject()||!e.value("type").isString())return;if(qAbs(double(QDateTime::currentMSecsSinceEpoch())-e.value("timestamp").toDouble())>120000)return;const auto messageId=e.value("messageId").toString();if(m_seen.contains(messageId))return;m_seen<<messageId;if(m_seen.size()>256)m_seen.removeFirst();const auto p=e.value("payload").toObject();const auto type=e.value("type").toString();
@@ -116,8 +117,9 @@ void Bridge::receive(QString message){if(message.toUtf8().size()>4*1024*1024){m_
  if(type=="auth_result"){if(!m_authSent)return;m_online=p.value("authenticated").toBool();if(m_online){setStatus(tr("Connected"));m_lastPong.restart();}else{m_settings.remove(deviceKey(m_url)+"/credential");m_manual=true;setStatus(tr("Authorization rejected; pair again"));m_socket.close();}updateNative();return;}
  if(type=="error"){const auto code=p.value("code").toString();if(code=="unauthorized")m_settings.remove(deviceKey(m_url)+"/credential");if(code=="unauthorized"||code.startsWith("pairing_")||code.startsWith("pair_")){clearPairing();m_manual=true;m_online=false;m_socket.close();setStatus(tr("Authorization rejected; pair again"));}emit notification(p.value("message").toString(tr("Device rejected request")));return;}
  if(!m_online)return;
+ if(type=="capabilities"){m_peerFeatures.clear();const auto features=p.value("features").toArray();for(int i=0;i<16&&i<features.size();++i){const auto feature=features[i].toString();if(feature=="volume_state"||feature=="get_snapshot")m_peerFeatures.insert(feature);}send("capabilities",{{"features",QJsonArray{"volume_state","get_snapshot"}}});return;}
  if(type=="session_snapshot"||type=="session_changed"||type=="metadata_changed"||type=="playback_state"||type=="position_anchor"||type=="available_commands"||type=="volume_state")applyMedia(p);
- if(type=="command_result"){const auto request=p.value("requestId").toString();if(!m_pending.contains(request))return;m_pending.remove(request);emit commandFinished(request,p.value("success").toBool(),p.value("error").toString());if(p.contains("success")&&!p.value("success").toBool())emit notification(p.value("error").toString(tr("Command unavailable")));}
+ if(type=="command_result"){const auto request=p.value("requestId").toString();if(!m_pending.contains(request))return;m_pending.remove(request);if(p.contains("volume")&&p.contains("maxVolume"))applyMedia({{"volume",p.value("volume")},{"maxVolume",p.value("maxVolume")}});emit commandFinished(request,p.value("success").toBool(),p.value("error").toString());if(p.contains("success")&&!p.value("success").toBool())emit notification(p.value("error").toString(tr("Command unavailable")));}
  if(type=="lyrics_payload"){m_embeddedLyrics=p.value("lrc").toString();m_embeddedKey=lyricKey();if(!m_settings.contains("lyrics/bindings/"+lyricIdentity())){cancelLyricRequest();setLyrics(parseLyrics(m_embeddedLyrics),"phone");}}
 }
 QStringList Bridge::commands()const{QStringList list;for(const auto&v:m_media.value("commands").toArray())list<<v.toString();return list;}
@@ -130,7 +132,7 @@ void Bridge::cancelLyricRequest(){++m_lyricGeneration;if(m_lyricProviders)m_lyri
 
 void Bridge::command(QString name,double value){if(!QStringList{"play","pause","toggle","next","previous","seek","volume"}.contains(name))return;if(!m_online||m_pending.size()>=64)return;static QElapsedTimer limit;static int burst=0;if(!limit.isValid()||limit.elapsed()>1000){limit.restart();burst=0;}if(++burst>20)return;QString capability=name=="toggle"?(playing()?"pause":"play"):name;if(!commands().contains(capability)&&!commands().contains(name)){emit notification(tr("Command unavailable"));return;}if(!std::isfinite(value))return;const auto id=QUuid::createUuid().toString(QUuid::WithoutBraces);QJsonObject p{{"requestId",id},{"command",name},{"value",value}};if(name=="seek"){value=qBound(0.,value,double(duration()));p["positionMs"]=value;p["value"]=value;}if(name=="volume")p["volume"]=qBound(0.,value,1.);m_pending[id]=QDateTime::currentMSecsSinceEpoch();send("command_request",p);}
 void Bridge::applyMedia(QJsonObject media){
- const auto old=title()+"|"+artist()+"|"+album();m_position=position();
+ const auto old=title()+"|"+artist()+"|"+album();const auto previousSession=m_media.value("sessionId");m_position=position();
  for(auto it=media.begin();it!=media.end();++it)m_media[it.key()]=it.value();
  if(media.contains("positionMs"))m_position=qMax<qint64>(0,media.value("positionMs").toInteger());m_anchor.restart();
  auto clearArtwork=[this]{m_artwork.clear();m_artworkDigest.clear();m_coverPalette={};m_artworkAccent="#9bc3c6";};
@@ -149,6 +151,8 @@ void Bridge::applyMedia(QJsonObject media){
   }
  }
  if(old!=title()+"|"+artist()+"|"+album()){if(!media.contains("artwork"))clearArtwork();}
+ if(old!=title()+"|"+artist()+"|"+album()||previousSession!=m_media.value("sessionId")){m_artworkRetry.stop();m_artworkRetryAttempts=0;}
+ if(!m_artwork.isEmpty()){m_artworkRetry.stop();m_artworkRetryAttempts=0;}else if(m_online&&m_peerFeatures.contains("get_snapshot")&&!title().isEmpty()&&m_artworkRetryAttempts<4&&!m_artworkRetry.isActive()){const int delays[]={800,1800,4000,8000};m_artworkRetry.start(delays[m_artworkRetryAttempts]);}
  if(m_lyricKey!=lyricKey()){++m_searchGeneration;if(m_lyricSearchReply)m_lyricSearchReply->abort();m_lyricResults.clear();emit lyricResultsChanged();fetchLyrics();}
  applyTheme();emit changed();emit progressChanged();updateNative();
 }
@@ -244,9 +248,11 @@ void Bridge::tryLyricProviders(QStringList providers,int index,QString key,quint
  if(generation!=m_lyricGeneration||key!=lyricKey())return;
  if(index>=providers.size()){m_lyricsLoading=false;emit lyricsChanged();return;}
  const auto provider=providers[index];const auto track=lyricTrack();
- m_lyricProviders->search(provider,title()+" "+artist(),[this,providers,index,key,generation,track](QList<LyricCandidate> candidates,QString){
-  if(generation!=m_lyricGeneration||key!=lyricKey())return;const bool strict=setting("lyrics/matchStrategy","strict").toString()!="balanced";
-  for(auto &candidate:candidates)candidate.score=LyricProviders::matchScore(track,candidate,strict);
+ const auto strategy=setting("lyrics/matchStrategy","default").toString();
+ const auto query=(strategy=="default"?LyricProviders::baseTitle(track.title):track.title)+" "+track.artist;
+ m_lyricProviders->search(provider,query,[this,providers,index,key,generation,track,strategy](QList<LyricCandidate> candidates,QString){
+  if(generation!=m_lyricGeneration||key!=lyricKey())return;const bool strict=strategy=="strict";
+  for(auto &candidate:candidates)candidate.score=strategy=="default"?LyricProviders::defaultMatchScore(track,candidate):LyricProviders::matchScore(track,candidate,strict);
   std::stable_sort(candidates.begin(),candidates.end(),[](const auto&a,const auto&b){return a.score>b.score;});
   for(const auto &candidate:candidates){bool exists=false;for(const auto &value:m_lyricResults){const auto row=value.toMap();if(row.value("provider")==candidate.provider&&row.value("sourceId")==candidate.id){exists=true;break;}}if(!exists&&m_lyricResults.size()<48)m_lyricResults<<candidate.toVariant();}emit lyricResultsChanged();
   candidates.erase(std::remove_if(candidates.begin(),candidates.end(),[strict](const auto &candidate){return candidate.score<(strict?90.:80.);}),candidates.end());if(candidates.size()>3)candidates=candidates.mid(0,3);
@@ -321,7 +327,7 @@ void Bridge::searchLyrics(QString query){
 }
 void Bridge::searchNextLyricProvider(QString query,QStringList providers,int index,QString key,quint64 generation){
  if(generation!=m_searchGeneration||key!=lyricKey()||index>=providers.size())return;const auto track=lyricTrack();
- m_lyricProviders->search(providers[index],query,[this,query,providers,index,key,generation,track](QList<LyricCandidate> candidates,QString){if(generation!=m_searchGeneration||key!=lyricKey())return;for(auto &candidate:candidates){candidate.score=LyricProviders::matchScore(track,candidate,true);if(m_lyricResults.size()<48)m_lyricResults<<candidate.toVariant();}emit lyricResultsChanged();searchNextLyricProvider(query,providers,index+1,key,generation);});
+ m_lyricProviders->search(providers[index],query,[this,query,providers,index,key,generation,track](QList<LyricCandidate> candidates,QString){if(generation!=m_searchGeneration||key!=lyricKey())return;for(auto &candidate:candidates){const auto strategy=setting("lyrics/matchStrategy","default").toString();candidate.score=strategy=="default"?LyricProviders::defaultMatchScore(track,candidate):LyricProviders::matchScore(track,candidate,strategy=="strict");if(m_lyricResults.size()<48)m_lyricResults<<candidate.toVariant();}emit lyricResultsChanged();searchNextLyricProvider(query,providers,index+1,key,generation);});
 }
 void Bridge::bindLyrics(qint64 id){if(id>0)bindLyricCandidate("lrclib",QString::number(id));}
 void Bridge::bindLyricCandidate(QString provider,QString sourceId){

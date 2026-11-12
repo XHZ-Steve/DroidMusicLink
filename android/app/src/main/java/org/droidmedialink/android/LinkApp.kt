@@ -27,6 +27,7 @@ object Hub {
  val connected = MutableStateFlow<Set<String>>(emptySet())
  val pending = MutableStateFlow<PendingPair?>(null)
  var broadcast: ((JSONObject) -> Unit)? = null
+ var broadcastVolume: ((JSONObject) -> Unit)? = null
  var control: ((String, JSONObject) -> String?)? = null
  var refreshMedia: (() -> Unit)? = null
  var revoke: ((String) -> Unit)? = null

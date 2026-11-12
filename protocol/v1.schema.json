@@ -32,6 +32,7 @@
         "auth",
         "auth_result",
         "session_snapshot",
+        "get_snapshot",
         "session_changed",
         "metadata_changed",
         "artwork_info",

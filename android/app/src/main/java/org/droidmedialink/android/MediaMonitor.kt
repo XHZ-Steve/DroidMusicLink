@@ -2,6 +2,15 @@ package org.droidmedialink.android
 
 import android.content.ComponentName
 import android.content.Context
+import android.content.BroadcastReceiver
+import android.content.Intent
+import android.content.IntentFilter
+import android.database.ContentObserver
+import android.provider.Settings
+import android.net.Uri
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import androidx.core.content.ContextCompat
 import android.app.NotificationManager
 import android.media.AudioManager
 import android.media.MediaMetadata
@@ -12,8 +21,9 @@ import android.util.Base64
 import android.view.KeyEvent
 import org.json.*
 import java.io.ByteArrayOutputStream
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.launch
+import kotlinx.coroutines.*
+import java.net.HttpURLConnection
+import java.net.URL
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 
@@ -34,6 +44,89 @@ class MediaMonitor : NotificationListenerService() {
 
 class MediaSessionTracker(private val context:Context) {
  private val handler = Handler(Looper.getMainLooper())
+ private val audio=context.getSystemService(AudioManager::class.java)
+ private var observingVolume=false
+ private var receivingVolume=false
+ private var lastVolume=""
+ private var artworkKey=""
+ private var artworkEncoded=""
+ private var artworkAttempted=false
+ private var artworkJob:Job?=null
+ private val volumeRefresh=Runnable { publishVolume() }
+ private val volumeConfirm=Runnable { publishVolume(true) }
+ private val volumeSettle=Runnable { publishVolume(true) }
+ private val volumeObserver=object:ContentObserver(handler){override fun onChange(selfChange:Boolean){scheduleVolumeRefresh()}}
+ // OEM compatibility supplement; always read AudioManager rather than trust extras.
+ private val volumeReceiver=object:BroadcastReceiver(){override fun onReceive(context:Context?,intent:Intent?){if(intent?.action=="android.media.VOLUME_CHANGED_ACTION")scheduleVolumeRefresh()}}
+ private fun scheduleVolumeRefresh(){handler.removeCallbacks(volumeRefresh);handler.postDelayed(volumeRefresh,25)}
+ private fun volumeSupported(info:MediaController.PlaybackInfo?)=if(info?.playbackType==MediaController.PlaybackInfo.PLAYBACK_TYPE_REMOTE) info.volumeControl==android.media.VolumeProvider.VOLUME_CONTROL_ABSOLUTE else !audio.isVolumeFixed
+ private fun volumeState(info:MediaController.PlaybackInfo?=current?.playbackInfo):JSONObject {
+  val local=info?.playbackType!=MediaController.PlaybackInfo.PLAYBACK_TYPE_REMOTE
+  return JSONObject().put("volume",if(local)audio.getStreamVolume(AudioManager.STREAM_MUSIC) else info?.currentVolume?:0)
+   .put("maxVolume",if(local)audio.getStreamMaxVolume(AudioManager.STREAM_MUSIC) else info?.maxVolume?:0)
+ }
+ private fun publishVolume(force:Boolean=false,info:MediaController.PlaybackInfo?=current?.playbackInfo){
+  val c=current?:return
+  val data=runCatching { volumeState(info) }.getOrNull()?:return
+  val commands=Hub.media.value.optJSONArray("commands")?:JSONArray()
+  val values=(0 until commands.length()).map { commands.optString(it) }.filter { it!="volume" }.toMutableList()
+  if(volumeSupported(info))values.add("volume")
+  data.put("commands",JSONArray(values))
+  val key="${c.sessionToken.hashCode()}:${data.optInt("volume")}:${data.optInt("maxVolume")}:${volumeSupported(info)}"
+  if(!force&&key==lastVolume)return
+  lastVolume=key
+  val state=JSONObject(Hub.media.value.toString());for(name in listOf("volume","maxVolume","commands"))state.put(name,data.get(name))
+  val playback=c.playbackState
+  val speed=(playback?.playbackSpeed?:1f).takeIf { it.isFinite() }?:1f
+  val position=(playback?.position?:0L)+if(playback?.state==PlaybackState.STATE_PLAYING)((SystemClock.elapsedRealtime()-playback.lastPositionUpdateTime)*speed).toLong()else 0L
+  state.put("positionMs",position.coerceAtLeast(0)).put("speed",speed).put("state",if(playback?.state==PlaybackState.STATE_PLAYING)"playing" else if(playback?.state==PlaybackState.STATE_PAUSED)"paused" else "stopped")
+  Hub.media.value=state;Hub.broadcastVolume?.invoke(data)
+ }
+ private fun encodeBitmap(bitmap:Bitmap,owned:Boolean):String? {
+  var small:Bitmap?=null
+  try {
+   val scale=minOf(1f,512f/maxOf(bitmap.width,bitmap.height))
+   small=Bitmap.createScaledBitmap(bitmap,maxOf(1,(bitmap.width*scale).toInt()),maxOf(1,(bitmap.height*scale).toInt()),true)
+   val out=ByteArrayOutputStream()
+   if(!small.compress(Bitmap.CompressFormat.JPEG,78,out)||out.size()==0||out.size()>256*1024)return null
+   return Base64.encodeToString(out.toByteArray(),Base64.NO_WRAP)
+  }finally{if(small!==bitmap)small?.recycle();if(owned)bitmap.recycle()}
+ }
+ private fun readArtwork(metadata:MediaMetadata):String? {
+  val bitmap=metadata.getBitmap(MediaMetadata.METADATA_KEY_ALBUM_ART)?:metadata.getBitmap(MediaMetadata.METADATA_KEY_ART)?:metadata.getBitmap(MediaMetadata.METADATA_KEY_DISPLAY_ICON)
+  if(bitmap!=null)return encodeBitmap(bitmap,false)
+  val address=metadata.getString(MediaMetadata.METADATA_KEY_ALBUM_ART_URI)?:metadata.getString(MediaMetadata.METADATA_KEY_ART_URI)?:metadata.getString(MediaMetadata.METADATA_KEY_DISPLAY_ICON_URI)?:return null
+  val uri=Uri.parse(address);var connection:HttpURLConnection?=null
+  try {
+   val input=when(uri.scheme){
+    "content","android.resource"->context.contentResolver.openInputStream(uri)
+    "https"->{connection=URL(address).openConnection() as HttpURLConnection;connection!!.connectTimeout=3000;connection!!.readTimeout=3000;connection!!.inputStream}
+    else->null
+   }?:return null
+   val bytes=input.use { stream->val out=ByteArrayOutputStream();val buffer=ByteArray(8192);while(out.size()<=2*1024*1024){val count=stream.read(buffer,0,minOf(buffer.size,2*1024*1024+1-out.size()));if(count<=0)break;out.write(buffer,0,count)};out.toByteArray() };if(bytes.size>2*1024*1024)return null
+   val bounds=BitmapFactory.Options().apply { inJustDecodeBounds=true };BitmapFactory.decodeByteArray(bytes,0,bytes.size,bounds)
+   if(bounds.outWidth<=0||bounds.outHeight<=0||bounds.outWidth>8192||bounds.outHeight>8192)return null
+   val options=BitmapFactory.Options().apply { inSampleSize=1 };while(maxOf(bounds.outWidth,bounds.outHeight)/options.inSampleSize>1024)options.inSampleSize*=2
+   val decoded=BitmapFactory.decodeByteArray(bytes,0,bytes.size,options)?:return null
+   return encodeBitmap(decoded,true)
+  }finally{connection?.disconnect()}
+ }
+ private fun ensureArtwork(c:MediaController,metadata:MediaMetadata?,key:String){
+  if(key!=artworkKey){artworkJob?.cancel();artworkJob=null;artworkKey=key;artworkEncoded="";artworkAttempted=false}
+  if(artworkEncoded.isNotEmpty()||artworkAttempted||artworkJob?.isActive==true)return
+  artworkAttempted=true
+  artworkJob=Hub.scope.launch {
+   for(wait in listOf(0L,600L,1800L,4500L)){
+    if(wait>0)delay(wait)
+    if(artworkKey!=key||current?.sessionToken!=c.sessionToken)return@launch
+    val snapshot=c.metadata?:metadata
+    val encoded=try{withContext(Dispatchers.IO){snapshot?.let { readArtwork(it) }}}catch(cancelled:CancellationException){throw cancelled}catch(_:Exception){null}
+    if(artworkKey!=key||current?.sessionToken!=c.sessionToken)return@launch
+    if(!encoded.isNullOrEmpty()){artworkEncoded=encoded;publish();return@launch}
+   }
+  }
+ }
+
  private val manager=context.getSystemService(MediaSessionManager::class.java)
  private val component=ComponentName(context,MediaMonitor::class.java)
  private var listening=false
@@ -44,6 +137,8 @@ class MediaSessionTracker(private val context:Context) {
  private val listener = MediaSessionManager.OnActiveSessionsChangedListener { attach(it.orEmpty()) }
  fun start() {
   manual=Hub.string("manual").ifEmpty { null }
+  if(!observingVolume)runCatching { context.contentResolver.registerContentObserver(Settings.System.CONTENT_URI,true,volumeObserver);observingVolume=true }
+  if(!receivingVolume)runCatching { ContextCompat.registerReceiver(context,volumeReceiver,IntentFilter("android.media.VOLUME_CHANGED_ACTION"),ContextCompat.RECEIVER_EXPORTED);receivingVolume=true }
   Hub.select = { manual = it; publish() }
   Hub.control = { command,payload -> execute(command,payload) }
   Hub.refreshMedia = { refresh() }
@@ -51,6 +146,7 @@ class MediaSessionTracker(private val context:Context) {
   settingsJob=Hub.scope.launch { Hub.preferences.map { Triple(Hub.string("manual"),Hub.string("preferred"),Hub.string("excluded")) }.distinctUntilChanged().collect { manual=it.first.ifEmpty { null };publish() } }
  }
  fun refresh() {
+  artworkAttempted=false
   Hub.mediaAccess.value=MediaMonitor.hasAccess(context)
   try {
    if(!Hub.mediaAccess.value) { if(listening)manager.removeOnActiveSessionsChangedListener(listener);listening=false;attach(emptyList());return }
@@ -62,9 +158,9 @@ class MediaSessionTracker(private val context:Context) {
   controllers.forEach { (c,callback) -> c.unregisterCallback(callback) }; controllers.clear()
   sessions.forEach { c ->
    val cb = object: MediaController.Callback() {
-    override fun onMetadataChanged(metadata: MediaMetadata?) = publish()
+    override fun onMetadataChanged(metadata: MediaMetadata?) { if(current?.sessionToken==c.sessionToken){artworkJob?.cancel();artworkJob=null;artworkEncoded="";artworkAttempted=false};publish() }
     override fun onPlaybackStateChanged(state: PlaybackState?) = publish()
-    override fun onAudioInfoChanged(info: MediaController.PlaybackInfo) = publish()
+    override fun onAudioInfoChanged(info: MediaController.PlaybackInfo) { if(current?.sessionToken==c.sessionToken)publishVolume(true,info) }
     override fun onSessionDestroyed() { controllers.remove(c); publish() }
    }; controllers[c]=cb; c.registerCallback(cb,handler)
   }; publish()
@@ -78,6 +174,7 @@ class MediaSessionTracker(private val context:Context) {
   Hub.sources.value = controllers.keys.map { it.packageName to appName(it) }
   val c=current
   if(c==null) {
+   artworkJob?.cancel();artworkJob=null;artworkKey="";artworkEncoded="";artworkAttempted=false;lastVolume=""
    val data=JSONObject().put("state","stopped").put("commands",JSONArray(if(canUseSystemKeys())MediaCommands.basic else emptyList<String>()))
    for(key in listOf("title","artist","album","appName","packageName","sessionId","artwork"))data.put(key,"")
    for(key in listOf("durationMs","positionMs","speed","volume","maxVolume"))data.put(key,0)
@@ -88,7 +185,7 @@ class MediaSessionTracker(private val context:Context) {
   val commands=MediaCommands.basic.toMutableList()
   fun supports(flag:Long,name:String) { if(actions and flag != 0L) commands.add(name) }
   supports(PlaybackState.ACTION_SEEK_TO,"seek")
-  if(c.playbackInfo?.volumeControl == android.media.VolumeProvider.VOLUME_CONTROL_ABSOLUTE) commands.add("volume")
+  if(volumeSupported(c.playbackInfo)) commands.add("volume")
   val duration=(m?.getLong(MediaMetadata.METADATA_KEY_DURATION) ?: 0L).coerceAtLeast(0)
   val speed=(s?.playbackSpeed ?: 1f).takeIf { it.isFinite() } ?: 1f
   val position = (s?.position ?: 0L) + if(s?.state == PlaybackState.STATE_PLAYING) ((SystemClock.elapsedRealtime()-s.lastPositionUpdateTime)*speed).toLong() else 0L
@@ -96,17 +193,12 @@ class MediaSessionTracker(private val context:Context) {
    .put("appName",appName(c)).put("packageName",c.packageName).put("sessionId",c.packageName+":"+c.sessionToken.hashCode())
    .put("durationMs",duration).put("positionMs",position.coerceAtLeast(0)).put("speed",speed)
    .put("state",if(s?.state==PlaybackState.STATE_PLAYING) "playing" else if(s?.state==PlaybackState.STATE_PAUSED) "paused" else "stopped")
-   .put("commands",JSONArray(commands)).put("volume",c.playbackInfo?.currentVolume ?: 0).put("maxVolume",c.playbackInfo?.maxVolume ?: 0)
-  runCatching {
-   val bitmap=m?.getBitmap(MediaMetadata.METADATA_KEY_ALBUM_ART) ?: m?.getBitmap(MediaMetadata.METADATA_KEY_ART)
-   if(bitmap!=null) {
-    val scale=minOf(1f,512f/maxOf(bitmap.width,bitmap.height))
-    val small=android.graphics.Bitmap.createScaledBitmap(bitmap,maxOf(1,(bitmap.width*scale).toInt()),maxOf(1,(bitmap.height*scale).toInt()),true)
-    val out=ByteArrayOutputStream();small.compress(android.graphics.Bitmap.CompressFormat.JPEG,78,out)
-    if(out.size()<=256*1024) data.put("artwork",Base64.encodeToString(out.toByteArray(),Base64.NO_WRAP))
-    if(small!==bitmap) small.recycle()
-   }
-  }
+   .put("commands",JSONArray(commands))
+  val volume=volumeState(c.playbackInfo);data.put("volume",volume.optInt("volume")).put("maxVolume",volume.optInt("maxVolume"))
+  val key="${c.sessionToken.hashCode()}:${data.optString("title")}:${data.optString("artist")}:${data.optString("album")}:${m?.getString(MediaMetadata.METADATA_KEY_ALBUM_ART_URI)}:${m?.getString(MediaMetadata.METADATA_KEY_ART_URI)}:${m?.getString(MediaMetadata.METADATA_KEY_DISPLAY_ICON_URI)}"
+  ensureArtwork(c,m,key)
+  data.put("artwork",artworkEncoded)
+
   Hub.media.value=data;Hub.broadcast?.invoke(data)
  }
  private fun execute(command:String,payload:JSONObject):String? {
@@ -124,12 +216,14 @@ class MediaSessionTracker(private val context:Context) {
     "play" -> t.play();"pause" -> t.pause();"toggle" -> if(c.playbackState?.state==PlaybackState.STATE_PLAYING) t.pause() else t.play()
     "next" -> t.skipToNext();"previous" -> t.skipToPrevious()
     "seek" -> { val value=payload.optLong("positionMs",payload.optLong("value",-1));val duration=Hub.media.value.optLong("durationMs");if(value<0 || duration>0 && value>duration) return "invalid_position";t.seekTo(value) }
-    "volume" -> { val value=payload.optDouble("volume",payload.optDouble("value",-1.0));if(!ProtocolGuard.volumeValid(value)) return "invalid_volume";c.setVolumeTo(kotlin.math.round(value*(c.playbackInfo?.maxVolume ?: 0)).toInt(),0) }
+    "volume" -> { val value=payload.optDouble("volume",payload.optDouble("value",-1.0));if(!ProtocolGuard.volumeValid(value)) return "invalid_volume";if(c.playbackInfo?.playbackType==MediaController.PlaybackInfo.PLAYBACK_TYPE_REMOTE)c.setVolumeTo(kotlin.math.round(value*(c.playbackInfo?.maxVolume?:0)).toInt(),0)
+     else audio.setStreamVolume(AudioManager.STREAM_MUSIC,kotlin.math.round(value*audio.getStreamMaxVolume(AudioManager.STREAM_MUSIC)).toInt(),0)
+     publishVolume(true);handler.removeCallbacks(volumeConfirm);handler.removeCallbacks(volumeSettle);handler.postDelayed(volumeConfirm,120);handler.postDelayed(volumeSettle,400) }
     else -> return "unsupported"
    };null
   } catch(_:SecurityException) { "permission_denied" } catch(_:RuntimeException) { "media_unavailable" }
  }
  private fun mediaKeys(key:Int,dispatch:(KeyEvent)->Boolean):Boolean { val now=SystemClock.uptimeMillis();val down=dispatch(KeyEvent(now,now,KeyEvent.ACTION_DOWN,key,0));val up=dispatch(KeyEvent(now,SystemClock.uptimeMillis(),KeyEvent.ACTION_UP,key,0));return down&&up }
- fun stop() { settingsJob?.cancel();settingsJob=null;if(listening)manager.removeOnActiveSessionsChangedListener(listener);listening=false;controllers.forEach { (c,cb)->c.unregisterCallback(cb) };controllers.clear();Hub.control=null;Hub.select=null;Hub.refreshMedia=null;Hub.sources.value=emptyList();Hub.media.value=JSONObject().put("state","stopped").put("commands",JSONArray());Hub.broadcast?.invoke(Hub.media.value) }
+ fun stop() { artworkJob?.cancel();artworkJob=null;handler.removeCallbacks(volumeRefresh);handler.removeCallbacks(volumeConfirm);handler.removeCallbacks(volumeSettle);if(observingVolume){context.contentResolver.unregisterContentObserver(volumeObserver);observingVolume=false};if(receivingVolume){runCatching { context.unregisterReceiver(volumeReceiver) };receivingVolume=false};settingsJob?.cancel();settingsJob=null;if(listening)manager.removeOnActiveSessionsChangedListener(listener);listening=false;controllers.forEach { (c,cb)->c.unregisterCallback(cb) };controllers.clear();Hub.control=null;Hub.select=null;Hub.refreshMedia=null;Hub.sources.value=emptyList();Hub.media.value=JSONObject().put("state","stopped").put("commands",JSONArray());Hub.broadcast?.invoke(Hub.media.value) }
 }
 

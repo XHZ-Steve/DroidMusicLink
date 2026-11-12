@@ -42,6 +42,35 @@ QVariantList LyricProviders::descriptors()const{
   const auto status=m_status.value(id);for(auto it=status.cbegin();it!=status.cend();++it)row[it.key()]=it.value();result<<row;
  }return result;
 }
+QString LyricProviders::baseTitle(QString title){
+ const QRegularExpression suffix(QStringLiteral("\\s*(?:\\([^()]*\\)|（[^（）]*）|\\[[^\\[\\]]*\\]|【[^【】]*】)\\s*$"));
+ for(;;){const auto match=suffix.match(title);if(!match.hasMatch())break;title.truncate(match.capturedStart());}
+ return title.trimmed();
+}
+double LyricProviders::defaultMatchScore(const LyricTrack &track,const LyricCandidate &candidate){
+ const auto title=normalized(track.title),other=normalized(candidate.title);
+ const bool exact=title==other;
+ if(title.isEmpty()||other.isEmpty()||(!exact&&(normalized(baseTitle(track.title)).isEmpty()||normalized(baseTitle(track.title))!=normalized(baseTitle(candidate.title)))))return 0;
+ const auto artist=normalized(track.artist),otherArtist=normalized(candidate.artist);
+ const QStringList unknownArtists={"unknown","unknown artist","未知","未知艺术家","未知歌手"};
+ if(artist.isEmpty()||otherArtist.isEmpty()||unknownArtists.contains(artist)||unknownArtists.contains(otherArtist))return 0;
+ const bool sameArtist=artist==otherArtist;
+ if(!sameArtist){
+  const QRegularExpression separators(QStringLiteral("[/,;、&]|\\s+(?:feat\\.?|ft\\.?|featuring|with|x)\\s+"),QRegularExpression::CaseInsensitiveOption);
+  QStringList a,b;for(const auto &name:track.artist.split(separators,Qt::SkipEmptyParts)){auto key=normalized(name);if(!key.isEmpty()&&!a.contains(key))a<<key;}
+  for(const auto &name:candidate.artist.split(separators,Qt::SkipEmptyParts)){auto key=normalized(name);if(!key.isEmpty()&&!b.contains(key))b<<key;}
+  int shared=0;for(const auto &name:a)if(b.contains(name))++shared;
+  const bool primaryMatches=!a.isEmpty()&&!b.isEmpty()&&a.first()==b.first();
+  if(shared==0||(!primaryMatches&&shared*2<qMax(a.size(),b.size())))return 0;
+ }
+ const bool timed=track.duration>0&&candidate.duration>0;
+ const auto difference=qAbs(track.duration-candidate.duration);
+ const double tolerance=qBound(4500.,double(track.duration)*.04,12000.);
+ if(timed&&difference>tolerance)return 0;
+ double score=(timed?96.:90.)-(exact?0.:7.)-(sameArtist?0.:3.)-(timed?6.*difference/tolerance:0.);
+ if(!track.album.isEmpty()&&normalized(track.album)==normalized(candidate.album))score+=3.;
+ return qBound(0.,score,100.);
+}
 double LyricProviders::matchScore(const LyricTrack &track,const LyricCandidate &candidate,bool strict){
  if(normalized(track.title).isEmpty()||normalized(track.title)!=normalized(candidate.title))return 0;
  if(normalized(track.artist).isEmpty()||normalized(track.artist)!=normalized(candidate.artist))return 0;

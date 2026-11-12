@@ -133,8 +133,9 @@ private:
  friend class LyricsEngineTests;
  QSettings m_settings;QWebSocket m_socket;QNetworkAccessManager m_network;QUdpSocket m_mdns;
  QTimer m_progress,m_heartbeat,m_retry,m_pairTimeout;QElapsedTimer m_anchor,m_lastPong;
+ QTimer m_artworkRetry;int m_artworkRetryAttempts=0;
  QTimer m_lyricClock;bool m_uiVisible=true,m_lyricsLoading=false;int m_currentLyricLine=-1;
- QSet<QString> m_lyricSurfaces;
+ QSet<QString> m_lyricSurfaces,m_peerFeatures;
  QVector<qint64> m_lyricTimes;QString m_lyricSource,m_embeddedLyrics,m_embeddedKey;
  QPointer<QNetworkReply> m_lyricReply,m_lyricSearchReply;
  qint64 m_lyricRetryAfter=0;

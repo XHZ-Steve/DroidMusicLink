@@ -234,14 +234,28 @@ ApplicationWindow {
     AppDialog { id: clearCache; title:qsTr("Delete cached lyrics?");anchors.centerIn:parent;modal:true;standardButtons:Dialog.Ok|Dialog.Cancel;onAccepted:backend.clearLyricsCache() }
     AppDialog { id: revoke; title:qsTr("Forget device?"); anchors.centerIn: parent; modal:true; standardButtons:Dialog.Ok|Dialog.Cancel; Label { text:qsTr("Saved credentials will be removed. Pair again to reconnect."); wrapMode:Text.Wrap; width:300 } onAccepted:backend.forgetDevice(root.selectedDeviceUrl) }
     Window {
-        id: floating; objectName:"floating"; onVisibleChanged: backend.setUiVisible((root.visible&&root.visibility!==Window.Minimized) || desktop.visible || floating.visible || trayWindow.visible); width:390; height:180; minimumWidth:280;minimumHeight:160; visible:false; title:qsTr("Floating player"); color:"transparent"; flags:Qt.Tool|(root.overlayTopmost?Qt.WindowStaysOnTopHint:0)
+        id: floating; objectName:"floating"; onVisibleChanged: backend.setUiVisible((root.visible&&root.visibility!==Window.Minimized) || desktop.visible || floating.visible || trayWindow.visible); width:390; height:180; minimumWidth:280;minimumHeight:160; visible:false; title:qsTr("Floating player"); color:"transparent"; flags:Qt.Tool|Qt.FramelessWindowHint|Qt.NoDropShadowWindowHint|(root.overlayTopmost?Qt.WindowStaysOnTopHint:0)
         x:root.pref("floatX",100); y:root.pref("floatY",100)
         onXChanged: if(visible)root.save("floatX",x); onYChanged:if(visible)root.save("floatY",y)
         AmbientScene{id:floatingBackdrop;anchors.fill:parent;visible:false}
-        GlassMaterial{configuration:root.material("floating");motion:root.motion;anchors.fill:parent;sourceItem:floatingBackdrop;glassEnabled:root.liquidStyle;cornerRadius:design.floatingRadius;active:floating.visible;dark:!root.light;backdropColor:root.bg;tintColor:design.elevated;tintStrength:root.light?.10+root.glass*.44:.04+root.glass*.25;fallbackColor:design.elevated}
-        ColumnLayout { anchors.fill:parent; anchors.margins:20; Label { textFormat:Text.PlainText; text:backend.title||qsTr("No media"); color:fg; font.pixelSize:20; elide:Text.ElideRight; Layout.fillWidth:true } Caption { text:backend.artist } Transport { Layout.alignment:Qt.AlignHCenter } }
+        GlassMaterial{opacity:root.highContrast?1:.72;configuration:root.material("floating");motion:root.motion;anchors.fill:parent;sourceItem:floatingBackdrop;glassEnabled:root.liquidStyle;cornerRadius:design.floatingRadius;active:floating.visible;dark:!root.light;backdropColor:root.bg;tintColor:design.elevated;tintStrength:root.light?.10+root.glass*.44:.04+root.glass*.25;fallbackColor:design.elevated}
+        MouseArea{anchors.left:parent.left;anchors.right:parent.right;anchors.top:parent.top;height:48;onPressed:floating.startSystemMove()}
+        ColumnLayout { anchors.fill:parent; anchors.margins:20; Label { textFormat:Text.PlainText; text:backend.title||qsTr("No media"); color:fg; font.pixelSize:20; elide:Text.ElideRight; Layout.fillWidth:true;Layout.rightMargin:24 } Caption { text:backend.artist;Layout.fillWidth:true;elide:Text.ElideRight } Transport { Layout.alignment:Qt.AlignHCenter } }
+        Action{anchors.top:parent.top;anchors.right:parent.right;anchors.margins:8;implicitWidth:28;implicitHeight:28;iconName:"x";text:qsTr("Close");onClicked:floating.hide()}
+        Repeater{model:[Qt.LeftEdge,Qt.RightEdge,Qt.TopEdge,Qt.BottomEdge,Qt.LeftEdge|Qt.TopEdge,Qt.RightEdge|Qt.TopEdge,Qt.LeftEdge|Qt.BottomEdge,Qt.RightEdge|Qt.BottomEdge]
+            MouseArea{
+                required property int modelData
+                readonly property bool atLeft:(modelData&Qt.LeftEdge)!==0;readonly property bool atRight:(modelData&Qt.RightEdge)!==0
+                readonly property bool atTop:(modelData&Qt.TopEdge)!==0;readonly property bool atBottom:(modelData&Qt.BottomEdge)!==0
+                x:atLeft?0:atRight?floating.width-6:6;y:atTop?0:atBottom?floating.height-6:6
+                width:atLeft||atRight?6:floating.width-12;height:atTop||atBottom?6:floating.height-12
+                cursorShape:(atLeft||atRight)&&(atTop||atBottom)?(atLeft===atTop?Qt.SizeFDiagCursor:Qt.SizeBDiagCursor):atLeft||atRight?Qt.SizeHorCursor:Qt.SizeVerCursor
+                onPressed:floating.startSystemResize(modelData)
+            }
+        }
     }
-    DesktopLyricsWindow {id:desktop;foregroundFullscreen:mainChrome.foregroundFullscreen;controller:backend;settingsRevision:root.settingsRevision
+    DesktopLyricsWindow {id:desktop;onSettingsRequested:{if(root.visibility===Window.Minimized)root.showNormal();else root.show();root.raise();root.requestActivate();root.openSettings(3,3)}
+        foregroundFullscreen:mainChrome.foregroundFullscreen;controller:backend;settingsRevision:root.settingsRevision
         onVisibleChanged:backend.setUiVisible((root.visible&&root.visibility!==Window.Minimized)||desktop.visible||floating.visible||trayWindow.visible)
     }
     Window {
@@ -300,30 +314,27 @@ ApplicationWindow {
     Shortcut{sequence:root.pref("shortcut/floating","Ctrl+Shift+P");onActivated:floating.visible=!floating.visible}
     Shortcut{sequence:"Escape";enabled:root.page!==0;onActivated:root.page=0}
     Popup{
-        id:volumePopup;parent:volumeButton;x:(parent.width-width)/2;y:-height-6;width:76;height:250;padding:12
+        id:volumePopup;parent:volumeButton;x:(parent.width-width)/2;y:-height-6;width:56;height:174;padding:8
         modal:false;focus:false;closePolicy:Popup.CloseOnEscape|Popup.CloseOnPressOutsideParent
         property bool pinned:false
-        property real previousVolume:0
         property real requestedVolume:0
         onClosed:{pinned=false;volumeDismiss.stop()}
         enter:Transition{NumberAnimation{property:"opacity";from:0;to:1;duration:root.motion?140:0}}
         exit:Transition{NumberAnimation{property:"opacity";from:1;to:0;duration:root.motion?140:0}}
         background:GlassMaterial{sourceItem:ambient;configuration:root.material("popup");glassEnabled:root.liquidStyle;active:volumePopup.visible;dark:!root.light;backdropColor:root.bg;fallbackColor:design.elevated;motion:root.motion}
         contentItem:ColumnLayout{spacing:8
-            Caption{Layout.alignment:Qt.AlignHCenter;text:backend.volumeKnown?Math.round(backend.volume*100)+"%":"—"}
+            Caption{Layout.alignment:Qt.AlignHCenter;text:backend.volumeKnown?Math.round((volumeSlider.pressed?volumeSlider.value:backend.volume)*100)+"%":"—"}
             Slider{
                 id:volumeSlider;Layout.fillHeight:true;Layout.alignment:Qt.AlignHCenter;implicitWidth:36;orientation:Qt.Vertical
                 from:0;to:1;value:backend.volume;enabled:root.supports("volume")&&backend.volumeKnown;wheelEnabled:true;Accessible.name:qsTr("Phone volume")
                 onMoved:{volumePopup.requestedVolume=value;if(!volumeSend.running)volumeSend.start()}
                 onPressedChanged:if(pressed)volumePopup.requestedVolume=value;else{volumeSend.restart();value=Qt.binding(function(){return backend.volume});volumeDismiss.restart()}
-                background:Rectangle{x:volumeSlider.leftPadding+(volumeSlider.availableWidth-width)/2;y:volumeSlider.topPadding;width:4;implicitHeight:148;height:volumeSlider.availableHeight;radius:2;color:root.light?"#24303b60":"#30e0e5ff"
+                background:Rectangle{x:volumeSlider.leftPadding+(volumeSlider.availableWidth-width)/2;y:volumeSlider.topPadding;width:4;implicitHeight:112;height:volumeSlider.availableHeight;radius:2;color:root.light?"#24303b60":"#30e0e5ff"
                     Rectangle{x:0;y:volumeSlider.visualPosition*parent.height;width:4;height:Math.max(0,parent.height-y);radius:2;color:root.accent}
                 }
                 handle:Rectangle{x:volumeSlider.leftPadding+(volumeSlider.availableWidth-width)/2;y:volumeSlider.topPadding+volumeSlider.visualPosition*(volumeSlider.availableHeight-height);implicitWidth:volumeSlider.pressed?16:12;implicitHeight:width;radius:width/2;color:root.accent;border.width:volumeSlider.visualFocus?2:0;border.color:root.fg}
             }
-            Action{Layout.alignment:Qt.AlignHCenter;text:backend.volume>0?qsTr("Mute"):qsTr("Unmute");iconName:backend.volume>0?"volume-x":"volume-2";implicitHeight:34;implicitWidth:34
-                onClicked:{volumeSend.stop();if(backend.volume>0){volumePopup.previousVolume=backend.volume;backend.command("volume",0)}else backend.command("volume",volumePopup.previousVolume>0?volumePopup.previousVolume:root.pref("media/unmuteVolume",.25))}
-            }
+
         }
         Timer{id:volumeSend;interval:80;onTriggered:if(backend.volumeKnown)backend.command("volume",volumePopup.requestedVolume)}
         HoverHandler{id:volumeHover;onHoveredChanged:if(hovered)volumeDismiss.stop();else volumeDismiss.restart()}
