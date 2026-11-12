@@ -41,6 +41,9 @@ void Bridge::setSetting(QString key,QVariant value){
  else if(key=="notifications"){if(value.metaType().id()!=QMetaType::Bool)return;}
  else return;
  m_settings.setValue("preferences/"+key,value);
+   // Choosing a lyric layout is an explicit request to show home lyrics. Older
+   // versions used the Dock button to persist showLyrics=false independently.
+   if(key=="home/layout"&&value.toInt()!=1)m_settings.setValue("preferences/showLyrics",true);
  if(key=="general/autostart"){QSettings run("HKEY_CURRENT_USER\\Software\\Microsoft\\Windows\\CurrentVersion\\Run",QSettings::NativeFormat);if(value.toBool())run.setValue("DroidMediaLink","\""+QDir::toNativeSeparators(QCoreApplication::applicationFilePath())+"\" --hidden");else run.remove("DroidMediaLink");}
  if(key=="lyrics/online"||key=="lyrics/autoMatch"||key=="lyrics/providerPriority"||key=="lyrics/preferredProvider"||key=="lyrics/preferCurrentApp"||key=="lyrics/matchStrategy"||key=="lyrics/crossSourceTranslation"||key.startsWith("lyrics/providers/")){cancelLyricRequest();m_lyricKey.clear();fetchLyrics();}
  if(key=="connection/autoReconnect"&&!value.toBool())m_retry.stop();
