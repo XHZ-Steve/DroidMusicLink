@@ -800,6 +800,35 @@
 <context>
     <name>Settings</name>
     <message>
+        <source>Home artwork scale</source>
+        <translation>主页封面比例</translation>
+    </message>
+    <message>
+        <source>Playback dock shape</source>
+        <translation>播放控制栏形状</translation>
+    </message>
+    <message>
+        <source>Play button style</source>
+        <translation>播放按钮风格</translation>
+    </message>
+    <message>
+        <source>rounded</source>
+        <translation>圆角矩形</translation>
+    </message>
+    <message>
+        <source>capsule</source>
+        <translation>胶囊</translation>
+    </message>
+    <message>
+        <source>solid</source>
+        <translation>实色</translation>
+    </message>
+    <message>
+        <source>water</source>
+        <translation>透明水玻璃</translation>
+    </message>
+
+    <message>
         <location filename="../src/SettingsSchema.h" line="34"/>
         <source>Select the player in the phone app</source>
         <translation>在手机应用中选择播放器</translation>

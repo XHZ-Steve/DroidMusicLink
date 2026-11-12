@@ -76,6 +76,15 @@ ApplicationWindow {
         contentItem:Text {text:a.iconName?Icons.glyph(a.iconName):a.text;font.family:a.iconName?lucide.name:root.font.family;font.pixelSize:a.iconName?20:design.body;font.weight:a.primary?Font.DemiBold:Font.Medium;color:a.primary?design.accentText:root.fg;opacity:a.enabled?1:.35;horizontalAlignment:Text.AlignHCenter;verticalAlignment:Text.AlignVCenter}
         ToolTip.visible:iconName.length>0&&hovered;ToolTip.delay:650;ToolTip.text:text
     }
+    component WindowButton: Button {
+        id: captionButton
+        property string iconName: ""
+        implicitWidth:42;implicitHeight:32;padding:0;display:AbstractButton.IconOnly
+        icon.source:"qrc:/icons/window/"+iconName+".svg";icon.width:14;icon.height:14;icon.color:root.fg
+        hoverEnabled:true;Accessible.name:text;transformOrigin:Item.Center
+        background:Rectangle{radius:8;color:captionButton.down?design.pressed:captionButton.hovered?design.hover:"transparent";border.width:captionButton.visualFocus?1:0;border.color:root.accent}
+        ToolTip.visible:hovered;ToolTip.delay:650;ToolTip.text:text
+    }
     component Field: TextField {
         id:field
         implicitHeight:design.control;color:root.fg;placeholderTextColor:design.faintText;leftPadding:14;rightPadding:14;selectByMouse:true
@@ -136,15 +145,23 @@ ApplicationWindow {
     component Transport: RowLayout {
         id: controls
         property bool compact: false
+        property Item backdrop:ambient
+        readonly property bool water:root.pref("dock/playStyle","solid")==="water"&&!root.highContrast
         spacing: compact?4:10
         Action { text: qsTr("Previous"); iconName:"skip-back"; Accessible.name: qsTr("Previous"); enabled: supports("previous"); onClicked: backend.command("previous") }
         Action {
-            objectName:"primaryTransport"
+            id:transportPlay;objectName:"primaryTransport"
             text: backend.playing ? qsTr("Pause") : qsTr("Play"); Accessible.name: backend.playing ? qsTr("Pause") : qsTr("Play")
             enabled: supports(backend.playing?"pause":"play") || supports("toggle")
             implicitWidth: controls.compact?44:48; implicitHeight: implicitWidth; font.pixelSize: 24
-            background: Rectangle { radius: width/2; color: root.accent; border.width:parent.visualFocus?2:0;border.color:root.fg; opacity: parent.enabled?(parent.down?.75:1):.3 }
-            contentItem: Text { text: Icons.glyph(backend.playing?"pause":"play"); color: design.accentText; font.family:lucide.name; font.pixelSize:26; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
+            background: GlassMaterial {
+                sourceItem:controls.backdrop;glassEnabled:controls.water;active:Window.window&&Window.window.visible;motion:root.motion
+                configuration:Object.assign({},root.material("dock"),{glassRadius:width/2,glassOpacity:.06,glassBlur:1.4,glassRefraction:1.6,glassDistortion:1.2,glassEdgeGlow:.65,glassEdgeWidth:1.7})
+                cornerRadius:width/2;dark:!root.light;backdropColor:root.bg;tintColor:root.accent;fallbackColor:root.accent
+                opacity:parent.enabled?(parent.down?.8:1):.3
+                Rectangle{anchors.fill:parent;radius:width/2;color:"transparent";border.width:transportPlay.visualFocus?2:0;border.color:root.fg}
+            }
+            contentItem: Text { text: Icons.glyph(backend.playing?"pause":"play"); color: controls.water?root.fg:design.accentText; font.family:lucide.name; font.pixelSize:26; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
             onClicked: backend.command(supports("toggle")?"toggle":backend.playing?"pause":"play")
         }
         Action { text: qsTr("Next"); iconName:"skip-forward"; Accessible.name: qsTr("Next"); enabled: supports("next"); onClicked: backend.command("next") }
@@ -176,25 +193,32 @@ ApplicationWindow {
             }
         }
         GlassMaterial {
-            id:playbackDock;objectName:"playbackDock";configuration:root.material("dock");motion:root.motion
-            Layout.alignment:Qt.AlignHCenter;Layout.preferredWidth:Math.min(660,canvasLayout.width);implicitHeight:100;visible:root.page===0
+            id:playbackDock;objectName:"playbackDock";property bool capsule:root.pref("dock/shape","rounded")==="capsule";configuration:capsule?Object.assign({},root.material("dock"),{glassRadius:height/2}):root.material("dock");motion:root.motion
+            Layout.alignment:Qt.AlignHCenter;Layout.preferredWidth:Math.min(660,canvasLayout.width);implicitHeight:capsule?84:100;visible:root.page===0
             sourceItem:ambient;glassEnabled:root.liquidStyle;cornerRadius:design.dockRadius;dark:!root.light;active:root.visible&&root.visibility!==Window.Minimized&&visible;backdropColor:root.bg;tintColor:design.elevated;tintStrength:root.light?.10+root.glass*.44:.04+root.glass*.25;fallbackColor:design.surface
+            CapsuleProgress {
+                anchors.left:parent.left;anchors.right:parent.right;height:playbackDock.height/2+8;radius:playbackDock.height/2;visible:playbackDock.capsule
+                from:0;to:Math.max(1,backend.duration);value:backend.position;enabled:root.supports("seek");accent:root.accent;trackColor:root.light?"#4024303b":"#38e0e5ff"
+                Accessible.name:qsTr("Playback position");onPressedChanged:if(!pressed)backend.command("seek",value)
+            }
             ColumnLayout {
-                anchors.fill:parent;anchors.leftMargin:18;anchors.rightMargin:18;anchors.topMargin:4;anchors.bottomMargin:10;spacing:0
-                RowLayout {Layout.fillWidth:true;spacing:8
+                anchors.fill:parent;anchors.leftMargin:playbackDock.capsule?26:18;anchors.rightMargin:anchors.leftMargin;anchors.topMargin:playbackDock.capsule?16:4;anchors.bottomMargin:playbackDock.capsule?16:10;spacing:0
+                RowLayout {Layout.fillWidth:true;visible:!playbackDock.capsule;spacing:8
                     Caption{text:root.time(backend.position);Layout.preferredWidth:36}
                     TrackSlider{Layout.fillWidth:true;from:0;to:Math.max(1,backend.duration);value:backend.position;enabled:supports("seek");Accessible.name:qsTr("Playback position");onPressedChanged:if(!pressed)backend.command("seek",value)}
                     Caption{text:root.time(backend.duration);horizontalAlignment:Text.AlignRight;Layout.preferredWidth:36}
                 }
-                RowLayout {Layout.fillWidth:true;spacing:0
+                RowLayout {Layout.fillWidth:true;Layout.fillHeight:true;spacing:0
                     Item{Layout.fillWidth:true;Layout.preferredWidth:1;implicitHeight:48
-                        Action{anchors.left:parent.left;anchors.verticalCenter:parent.verticalCenter;text:qsTr("Desktop lyrics");iconName:"captions";checked:desktop.requestedVisible;onClicked:desktop.toggleRequested()}
+                        Action{id:dockLyricsControl;anchors.left:parent.left;anchors.verticalCenter:parent.verticalCenter;text:qsTr("Desktop lyrics");iconName:"captions";checked:desktop.requestedVisible;onClicked:desktop.toggleRequested()}
+                        Caption{visible:playbackDock.capsule;anchors.left:dockLyricsControl.right;anchors.leftMargin:6;anchors.verticalCenter:parent.verticalCenter;text:root.time(backend.position)}
                     }
                     Transport{}
                     Item{Layout.fillWidth:true;Layout.preferredWidth:1;implicitHeight:48
                         Action{id:volumeButton;objectName:"volumeButton";anchors.right:parent.right;anchors.verticalCenter:parent.verticalCenter;text:qsTr("Phone volume");iconName:backend.volumeKnown&&backend.volume<=0?"volume-x":"volume-2";enabled:root.supports("volume")&&backend.volumeKnown
                             onHoveredChanged:if(hovered){volumeDismiss.stop();if(!volumePopup.visible)volumePopup.open()}else volumeDismiss.restart()
                             onClicked:{volumePopup.pinned=!volumePopup.pinned;if(volumePopup.pinned)volumePopup.open();else volumePopup.close()}}
+                        Caption{visible:playbackDock.capsule;anchors.right:volumeButton.left;anchors.rightMargin:6;anchors.verticalCenter:parent.verticalCenter;text:root.time(backend.duration)}
                     }
                 }
             }
@@ -240,7 +264,7 @@ ApplicationWindow {
         AmbientScene{id:floatingBackdrop;anchors.fill:parent;visible:false}
         GlassMaterial{opacity:root.highContrast?1:.72;configuration:root.material("floating");motion:root.motion;anchors.fill:parent;sourceItem:floatingBackdrop;glassEnabled:root.liquidStyle;cornerRadius:design.floatingRadius;active:floating.visible;dark:!root.light;backdropColor:root.bg;tintColor:design.elevated;tintStrength:root.light?.10+root.glass*.44:.04+root.glass*.25;fallbackColor:design.elevated}
         MouseArea{anchors.left:parent.left;anchors.right:parent.right;anchors.top:parent.top;height:48;onPressed:floating.startSystemMove()}
-        ColumnLayout { anchors.fill:parent; anchors.margins:20; Label { textFormat:Text.PlainText; text:backend.title||qsTr("No media"); color:fg; font.pixelSize:20; elide:Text.ElideRight; Layout.fillWidth:true;Layout.rightMargin:24 } Caption { text:backend.artist;Layout.fillWidth:true;elide:Text.ElideRight } Transport { Layout.alignment:Qt.AlignHCenter } }
+        ColumnLayout { anchors.fill:parent; anchors.margins:20; Label { textFormat:Text.PlainText; text:backend.title||qsTr("No media"); color:fg; font.pixelSize:20; elide:Text.ElideRight; Layout.fillWidth:true;Layout.rightMargin:24 } Caption { text:backend.artist;Layout.fillWidth:true;elide:Text.ElideRight } Transport { backdrop:floatingBackdrop;Layout.alignment:Qt.AlignHCenter } }
         Action{anchors.top:parent.top;anchors.right:parent.right;anchors.margins:8;implicitWidth:28;implicitHeight:28;iconName:"x";text:qsTr("Close");onClicked:floating.hide()}
         Repeater{model:[Qt.LeftEdge,Qt.RightEdge,Qt.TopEdge,Qt.BottomEdge,Qt.LeftEdge|Qt.TopEdge,Qt.RightEdge|Qt.TopEdge,Qt.LeftEdge|Qt.BottomEdge,Qt.RightEdge|Qt.BottomEdge]
             MouseArea{
@@ -274,7 +298,7 @@ ApplicationWindow {
                         Caption{text:backend.artist;visible:text.length>0;elide:Text.ElideRight;Layout.fillWidth:true}
                     }
                 }
-                Transport{compact:true;Layout.alignment:Qt.AlignHCenter}
+                Transport{compact:true;backdrop:trayBackdrop;Layout.alignment:Qt.AlignHCenter}
                 TrackSlider{Layout.fillWidth:true;implicitHeight:20;from:0;to:Math.max(1,backend.duration);value:backend.position;enabled:root.supports("seek");Accessible.name:qsTr("Playback position");onPressedChanged:if(!pressed)backend.command("seek",value)}
                 RowLayout{Layout.fillWidth:true
                     Action{text:qsTr("Open window");implicitHeight:34;onClicked:{trayWindow.hide();root.show();root.raise();root.requestActivate()}}
@@ -300,9 +324,9 @@ ApplicationWindow {
     Item{id:titleDragRegion;objectName:"titleDragRegion";anchors.top:parent.top;anchors.left:parent.left;anchors.right:parent.right;height:44;z:50
         RowLayout{id:captionControls;anchors.top:parent.top;anchors.right:parent.right;anchors.margins:4;spacing:2;opacity:root.chromeRevealed?1:0
             Behavior on opacity{NumberAnimation{duration:design.fast}}
-            Action{id:minimizeControl;objectName:"minimizeControl";text:qsTr("Minimize");iconName:"minus";implicitHeight:36;onClicked:mainChrome.minimize()}
-            Action{id:maximizeControl;objectName:"maximizeControl";text:mainChrome.maximized?qsTr("Restore"):qsTr("Maximize");iconName:mainChrome.maximized?"copy":"square";implicitHeight:36;onClicked:mainChrome.toggleMaximized()}
-            Action{id:closeControl;objectName:"closeControl";text:qsTr("Close");iconName:"x";implicitHeight:36;onClicked:mainChrome.close()}
+            WindowButton{id:minimizeControl;objectName:"minimizeControl";text:qsTr("Minimize");iconName:"minus";onClicked:mainChrome.minimize()}
+            WindowButton{id:maximizeControl;objectName:"maximizeControl";text:mainChrome.maximized?qsTr("Restore"):qsTr("Maximize");iconName:mainChrome.maximized?"copy":"square";onClicked:mainChrome.toggleMaximized()}
+            WindowButton{id:closeControl;objectName:"closeControl";text:qsTr("Close");iconName:"x";onClicked:mainChrome.close()}
         }
         Action{id:settingsGear;objectName:"settingsGear";anchors.right:captionControls.left;anchors.rightMargin:8;anchors.top:parent.top;anchors.topMargin:4;implicitHeight:36;text:qsTr("Settings");iconName:"settings";opacity:root.gearRevealed?1:0;onClicked:root.openSettings(0,0)
             Behavior on opacity{NumberAnimation{duration:design.fast}}

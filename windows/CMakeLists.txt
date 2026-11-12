@@ -10,8 +10,8 @@ if(MSVC)
  # C++20 __VA_OPT__ requires the conforming preprocessor, even with /std:c++20.
  add_compile_options(/Zc:preprocessor /utf-8)
 endif()
-find_package(Qt6 6.8 REQUIRED COMPONENTS Core Gui Concurrent Widgets Quick QuickControls2 QuickDialogs2 Network WebSockets ShaderTools)
-qt_standard_project_setup(REQUIRES 6.8)
+find_package(Qt6 6.11 REQUIRED COMPONENTS Core Gui Concurrent Widgets Quick QuickControls2 QuickDialogs2 Network WebSockets ShaderTools)
+qt_standard_project_setup(REQUIRES 6.11)
 # Native Quick frame, pinned Apache-2.0 QWindowKit. No replacement UI framework.
 find_package(Qt6 REQUIRED COMPONENTS CorePrivate GuiPrivate QuickPrivate)
 set(QWINDOWKIT_BUILD_STATIC ON CACHE BOOL "" FORCE)
@@ -21,7 +21,7 @@ set(QWINDOWKIT_INSTALL OFF CACHE BOOL "" FORCE)
 set(QWINDOWKIT_ENABLE_WINDOWS_SYSTEM_BORDERS ON CACHE BOOL "" FORCE)
 add_subdirectory(vendor/qwindowkit EXCLUDE_FROM_ALL)
 qt_add_executable(DroidMediaLink WIN32 src/main.cpp src/Bridge.cpp src/Bridge.h src/LyricProviders.cpp src/TrayPerformance.cpp src/TrayPerformance.h)
-qt_add_qml_module(DroidMediaLink URI DroidMediaLink VERSION 1.0 QML_FILES qml/Main.qml qml/Icons.js qml/GlassMaterial.qml qml/DesignTokens.qml qml/AmbientField.qml qml/CoverArtwork.qml qml/SettingsPage.qml qml/LyricView.qml qml/DesktopLyricsWindow.qml qml/NowPlayingCanvas.qml qml/TypographyTokens.qml qml/LyricInk.qml SOURCES src/LyricTimeline.h src/NativeWindowController.h src/NativeWindowController.cpp)
+qt_add_qml_module(DroidMediaLink URI DroidMediaLink VERSION 1.0 QML_FILES qml/Main.qml qml/Icons.js qml/GlassMaterial.qml qml/DesignTokens.qml qml/AmbientField.qml qml/CoverArtwork.qml qml/CapsuleProgress.qml qml/SettingsPage.qml qml/LyricView.qml qml/DesktopLyricsWindow.qml qml/NowPlayingCanvas.qml qml/TypographyTokens.qml qml/LyricInk.qml SOURCES src/LyricTimeline.h src/NativeWindowController.h src/NativeWindowController.cpp)
 target_include_directories(DroidMediaLink PRIVATE src)
 target_link_libraries(DroidMediaLink PRIVATE QWKQuick Qt6::Concurrent Qt6::Widgets Qt6::Quick Qt6::QuickControls2 Qt6::QuickDialogs2 Qt6::Network Qt6::WebSockets crypt32 dwmapi psapi)
 install(TARGETS DroidMediaLink RUNTIME DESTINATION .)
@@ -116,3 +116,10 @@ if(DML_QMLTESTRUNNER)
   set_tests_properties(qml_interaction_tests PROPERTIES ENVIRONMENT_MODIFICATION "PATH=path_list_prepend:$<TARGET_FILE_DIR:Qt6::Core>;PATH=path_list_prepend:${DML_COMPILER_BIN}")
  endif()
 endif()
+
+qt_add_resources(DroidMediaLink "window_icons" PREFIX "/icons/window" BASE "${CMAKE_CURRENT_SOURCE_DIR}/../assets/vendor/lucide/icons" FILES
+ "${CMAKE_CURRENT_SOURCE_DIR}/../assets/vendor/lucide/icons/minus.svg"
+ "${CMAKE_CURRENT_SOURCE_DIR}/../assets/vendor/lucide/icons/square.svg"
+ "${CMAKE_CURRENT_SOURCE_DIR}/../assets/vendor/lucide/icons/copy.svg"
+ "${CMAKE_CURRENT_SOURCE_DIR}/../assets/vendor/lucide/icons/x.svg"
+)

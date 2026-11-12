@@ -73,9 +73,11 @@ class MainActivity:ComponentActivity() {
  val connected by Hub.connected.collectAsStateWithLifecycle()
  val pending by Hub.pending.collectAsStateWithLifecycle()
  var page by remember { mutableIntStateOf(0) }
+ var settingsSection by remember { mutableIntStateOf(0) }
+ var confirmReset by remember { mutableStateOf(false) }
  var confirmRevoke by remember { mutableStateOf<Pair<String,String>?>(null) }
  var help by remember { mutableStateOf<Int?>(null) }
- var recommendations by remember { mutableStateOf(!context.getSharedPreferences("onboarding",0).getBoolean("shown",false)) }
+ var recommendations by remember { mutableStateOf(!context.getSharedPreferences("onboarding",0).getBoolean("permissionsV2",false)) }
  var update by remember { mutableStateOf("") }
  var checking by remember { mutableStateOf(false) }
  val scope=rememberCoroutineScope()
@@ -84,10 +86,11 @@ class MainActivity:ComponentActivity() {
  val glass=Hub.bool("liquidGlass") && Build.VERSION.SDK_INT>=33
  val backdrop=rememberLayerBackdrop()
  MaterialTheme(colorScheme=scheme) {
+  CompositionLocalProvider(LocalContentColor provides scheme.onSurface) {
   Box(Modifier.fillMaxSize()) {
    Box(Modifier.fillMaxSize().background(Brush.linearGradient(listOf(scheme.primaryContainer,scheme.surface,scheme.secondaryContainer))))
-  Scaffold(containerColor=Color.Transparent) { padding->
-   Column(Modifier.fillMaxSize().then(if(glass) Modifier.layerBackdrop(backdrop) else Modifier).padding(padding).background(Brush.verticalGradient(listOf(scheme.primaryContainer.copy(alpha=.45f),scheme.surface,scheme.surface))).verticalScroll(remember(page) { ScrollState(0) }).padding(horizontal=24.dp).padding(top=24.dp,bottom=130.dp),verticalArrangement=Arrangement.spacedBy(20.dp)) {
+  Scaffold(containerColor=Color.Transparent,contentColor=scheme.onSurface) { padding->
+   Column(Modifier.fillMaxSize().then(if(glass) Modifier.layerBackdrop(backdrop) else Modifier).padding(padding).background(Brush.verticalGradient(listOf(scheme.primaryContainer.copy(alpha=.45f),scheme.surface,scheme.surface))).verticalScroll(remember(page,settingsSection) { ScrollState(0) }).padding(horizontal=24.dp).padding(top=24.dp,bottom=130.dp),verticalArrangement=Arrangement.spacedBy(20.dp)) {
     Text(stringResource(when(page){1->R.string.devices;2->R.string.settings;else->R.string.app_name}),style=MaterialTheme.typography.headlineLarge,fontWeight=FontWeight.SemiBold)
     if(error.isNotEmpty() && page!=0)Text(error,color=scheme.error)
     if(page==0) {
@@ -125,25 +128,37 @@ class MainActivity:ComponentActivity() {
      } }
     }
     if(page==2) {
+     FlowRow(horizontalArrangement=Arrangement.spacedBy(8.dp)) {
+      listOf(R.string.connection_background,R.string.media_settings,R.string.appearance_settings,R.string.app_settings).forEachIndexed { i,title ->
+       FilterChip(settingsSection==i,{settingsSection=i},label={Text(stringResource(title))})
+      }
+     }
+     if(settingsSection==0) {
      TextButton(onClick={recommendations=true}) { Text(stringResource(R.string.recommended_settings)) }
 
       SettingSwitch(R.string.auto_start,Hub.bool("autoStart"),{Hub.set("autoStart",it)},{help=R.string.background_help})
       TextButton(onClick={context.startActivity(Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS))}) { Text(stringResource(R.string.battery_settings)) }
      
+     }
+     if(settingsSection==2) {
      SettingSwitch(R.string.liquid_glass,Build.VERSION.SDK_INT>=33 && Hub.bool("liquidGlass"),{Hub.set("liquidGlass",it)},{help=R.string.liquid_glass_help},enabled=Build.VERSION.SDK_INT>=33)
 
       Text(stringResource(R.string.theme),style=MaterialTheme.typography.titleMedium)
       FlowRow(horizontalArrangement=Arrangement.spacedBy(8.dp)) { listOf("" to R.string.system,"light" to R.string.light,"dark" to R.string.dark).forEach { (value,label)->FilterChip(Hub.string("theme")==value,{Hub.set("theme",value)},label={Text(stringResource(label))}) } }
      
 
-      Text(stringResource(R.string.language),style=MaterialTheme.typography.titleMedium)
-      FlowRow(horizontalArrangement=Arrangement.spacedBy(8.dp)) { listOf("" to R.string.system,"en" to R.string.english,"zh-CN" to R.string.chinese).forEach { (value,label)->FilterChip(Hub.string("language")==value,{(context as MainActivity).language(value)},label={Text(stringResource(label))}) } }
-     
-
+     }
+     if(settingsSection==1) {
       OutlinedTextField(Hub.string("preferred"),{Hub.set("preferred",it)},label={Text(stringResource(R.string.preferred_app))},modifier=Modifier.fillMaxWidth(),singleLine=true)
       OutlinedTextField(Hub.string("excluded"),{Hub.set("excluded",it)},label={Text(stringResource(R.string.excluded_apps))},modifier=Modifier.fillMaxWidth(),singleLine=true)
      
      TextButton(onClick={context.startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))}) { Text(stringResource(R.string.media_permission)) }
+
+     }
+     if(settingsSection==3) {
+      Text(stringResource(R.string.language),style=MaterialTheme.typography.titleMedium)
+      FlowRow(horizontalArrangement=Arrangement.spacedBy(8.dp)) { listOf("" to R.string.system,"en" to R.string.english,"zh-CN" to R.string.chinese).forEach { (value,label)->FilterChip(Hub.string("language")==value,{(context as MainActivity).language(value)},label={Text(stringResource(label))}) } }
+     
 
       TextButton(enabled=!checking,onClick={checking=true;scope.launch {
        update=withContext(Dispatchers.IO) { try {
@@ -157,26 +172,22 @@ class MainActivity:ComponentActivity() {
      
      TextButton(onClick={help=R.string.privacy_help}) { Text(stringResource(R.string.privacy)) }
 
-      FlowRow { TextButton(onClick={(context as MainActivity).exportPreferences()}) { Text(stringResource(R.string.export_settings)) };TextButton(onClick={(context as MainActivity).importPreferences()}) { Text(stringResource(R.string.import_settings)) };TextButton(onClick={scope.launch { SettingsTransfer.reset(context);(context as MainActivity).recreate() }}) { Text(stringResource(R.string.reset_settings)) } }
+      FlowRow { TextButton(onClick={(context as MainActivity).exportPreferences()}) { Text(stringResource(R.string.export_settings)) };TextButton(onClick={(context as MainActivity).importPreferences()}) { Text(stringResource(R.string.import_settings)) };TextButton(onClick={confirmReset=true}) { Text(stringResource(R.string.reset_settings)) } }
      
      Text("DroidMediaLink "+BuildConfig.VERSION_NAME,style=MaterialTheme.typography.labelMedium,color=scheme.onSurfaceVariant)
+     }
     }
    }
   }
-  NavigationBar(modifier=if(glass) Modifier.align(Alignment.BottomCenter).padding(horizontal=16.dp,vertical=8.dp).drawBackdrop(backdrop=backdrop,shape={RoundedCornerShape(32.dp)},effects={blur(4.dp.toPx());lens(16.dp.toPx(),28.dp.toPx())},onDrawSurface={drawRect(scheme.surface.copy(alpha=.4f))}) else Modifier.align(Alignment.BottomCenter),containerColor=if(glass) Color.Transparent else scheme.surfaceContainer) {
-   listOf(R.string.home to Lucide.Home,R.string.devices to Lucide.Computer,R.string.settings to Lucide.Settings).forEachIndexed { i,(text,icon)-> NavigationBarItem(selected=page==i,onClick={page=i},icon={LucideIcon(icon,stringResource(text))},label={Text(stringResource(text))}) }
+  GlassNavigation(page=page,onPage={page=it},backdrop=backdrop,glass=glass,modifier=Modifier.align(Alignment.BottomCenter))
   }
-  }
-  if(recommendations) AlertDialog(onDismissRequest={recommendations=false;context.getSharedPreferences("onboarding",0).edit().putBoolean("shown",true).apply()},title={Text(stringResource(R.string.recommended_settings))},text={Column {
-   TextButton(onClick={context.startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))}) { Text(stringResource(R.string.media_permission)) }
-   TextButton(onClick={context.startActivity(Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS))}) { Text(stringResource(R.string.battery_settings)) }
-   TextButton(onClick={context.startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS,android.net.Uri.parse("package:"+context.packageName)))}) { Text(stringResource(R.string.startup_settings)) }
-   Text(stringResource(R.string.startup_help),style=MaterialTheme.typography.bodySmall)
-  }},confirmButton={TextButton(onClick={recommendations=false;context.getSharedPreferences("onboarding",0).edit().putBoolean("shown",true).apply()}) { Text(stringResource(R.string.done)) }})
+  if(recommendations) PermissionOnboarding(onComplete={recommendations=false;context.getSharedPreferences("onboarding",0).edit().putBoolean("permissionsV2",true).apply()})
+  if(confirmReset) AlertDialog(onDismissRequest={confirmReset=false},title={Text(stringResource(R.string.reset_settings))},text={Text(stringResource(R.string.reset_warning))},confirmButton={TextButton(onClick={confirmReset=false;scope.launch{SettingsTransfer.reset(context);(context as MainActivity).recreate()}}){Text(stringResource(R.string.reset_settings))}},dismissButton={TextButton(onClick={confirmReset=false}){Text(stringResource(R.string.cancel))}})
   pending?.let { request->AlertDialog(onDismissRequest={request.approve(false)},icon={LucideIcon(Lucide.Computer,null)},title={Text(stringResource(R.string.approve_pairing))},text={Column(verticalArrangement=Arrangement.spacedBy(16.dp)) { Text(request.name);Text(request.sas,style=MaterialTheme.typography.displayMedium,fontWeight=FontWeight.Medium);Text(stringResource(R.string.compare_sas)) }},confirmButton={TextButton(onClick={request.approve(true)}) { Text(stringResource(R.string.codes_match)) }},dismissButton={TextButton(onClick={request.approve(false)}) { Text(stringResource(R.string.reject)) }}) }
   confirmRevoke?.let { peer->AlertDialog(onDismissRequest={confirmRevoke=null},title={Text(stringResource(R.string.revoke))},text={Text(stringResource(R.string.revoke_warning,peer.second))},confirmButton={TextButton(onClick={PairingStore(context).revoke(peer.first);confirmRevoke=null}) { Text(stringResource(R.string.revoke)) }},dismissButton={TextButton(onClick={confirmRevoke=null}) { Text(stringResource(R.string.cancel)) }}) }
   help?.let { text->AlertDialog(onDismissRequest={help=null},text={Text(stringResource(text))},confirmButton={TextButton(onClick={help=null}) { Text(stringResource(R.string.close)) }}) }
  }
+}
 }
 @Composable fun SettingSwitch(title:Int,value:Boolean,onChange:(Boolean)->Unit,onHelp:()->Unit,enabled:Boolean=true) {
  Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically) { Text(stringResource(title),Modifier.weight(1f));IconButton(onClick=onHelp) { LucideIcon(Lucide.HelpOutline,stringResource(R.string.help)) };Switch(value,onChange,enabled=enabled) }

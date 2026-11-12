@@ -55,10 +55,23 @@
   <string name="ready_to_pair">Select this phone on your computer</string>
   <string name="recommended_settings">Recommended settings</string>
   <string name="startup_settings">Startup settings</string>
-  <string name="startup_help">Startup controls vary by phone. Check background and startup options in app settings.</string>
+  <string name="startup_help">Enable start after reboot, then check the phone’s app startup and background settings. Android does not expose the manufacturer’s startup permission status; confirm this step after checking.</string>
   <string name="done">Done</string>
   <string name="codes_match">Codes match · Connect</string>
   <string name="compare_sas">Connect only if this code matches the one on your computer.</string>
   <string name="liquid_glass">Liquid Glass</string>
   <string name="liquid_glass_help">Optical refraction and blur by Kyant Backdrop. Requires Android 13 or newer; older devices use Material surfaces.</string>
+  <string name="connection_background">Connection &amp; background</string>
+  <string name="media_settings">Media</string>
+  <string name="appearance_settings">Appearance</string>
+  <string name="app_settings">App</string>
+  <string name="reset_warning">Appearance, language and player preferences will be reset. Paired computers will stay authorized.</string>
+  <string name="notification_permission">Connection notification</string>
+  <string name="guide_progress">%1$d / %2$d</string>
+  <string name="guide_media">Allow media access to sync the current track and playback controls. Notification messages are not read. If Android blocks this permission, enable Allow restricted settings in the app details first.</string>
+  <string name="guide_notifications">Allow the connection notification so you can see when the service is running.</string>
+  <string name="guide_battery">Choose DroidMediaLink in battery settings and allow unrestricted background activity. The next step opens automatically once the exemption is detected.</string>
+  <string name="settings_unavailable">This settings page is unavailable on this phone. You can skip this step.</string>
+  <string name="open_settings">Open settings</string>
+  <string name="skip">Skip</string>
 </resources>

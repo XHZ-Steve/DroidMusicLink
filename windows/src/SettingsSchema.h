@@ -46,6 +46,9 @@ inline QVariantList descriptors(){
  S("lyrics/providers/kugou/enabled","Kugou lyrics",3,0,"bool",true);
  S("lyrics/providers/lrclib/enabled","LRCLIB lyrics",3,0,"bool",true);
  S("home/layout","Home layout",4,0,"enum",0,0,2,1,QVariantList{QVariantMap{{"label",QCoreApplication::translate("Settings","Album focus")},{"value",0}},QVariantMap{{"label",QCoreApplication::translate("Settings","Expanded artwork")},{"value",1}},QVariantMap{{"label",QCoreApplication::translate("Settings","Expanded lyrics")},{"value",2}}});
+ S("home/artworkScale","Home artwork scale",4,0,"real",1.0,.55,1.35,.05);
+ S("dock/shape","Playback dock shape",4,0,"enum","rounded",0,1,1,options({"rounded","capsule"}));
+ S("dock/playStyle","Play button style",4,0,"enum","solid",0,1,1,options({"solid","water"}));
  S("desktopLyrics/windowWidth","Lyric window width",3,3,"int",800,280,4096,10,{},true);
  S("desktopLyrics/windowHeight","Lyric window height",3,3,"int",260,100,2160,10,{},true);
  action("importLyrics","Import lyrics",3,0);

@@ -17,6 +17,8 @@ Item {
     property bool ready: false
     property bool changingLayout: false
     readonly property int mode: {settingsRevision;return controller.setting("home/layout",0)}
+    readonly property real artworkScale:{settingsRevision;return Math.max(.55,Math.min(1.35,controller.setting("home/artworkScale",1)))}
+    readonly property real artworkShare:Math.min(.6,.46+Math.max(0,artworkScale-1)*.4)
     readonly property bool split: mode!==0 && width>780 && width/Math.max(1,height)>1.12
     readonly property bool lyricsMode: mode===2
     readonly property bool displayingLyrics: lyricsEnabled && mode!==1
@@ -80,11 +82,13 @@ Item {
     }
     function nextLayout(){freezeGeometry();controller.setSetting("home/layout",(mode+1)%3)}
     onModeChanged:if(ready){if(!changingLayout)freezeGeometry();scheduleTransition()}
+    onArtworkScaleChanged:cancelTransitionForResize()
     onWidthChanged:cancelTransitionForResize()
     onHeightChanged:cancelTransitionForResize()
     onActiveChanged:if(!active)cancelTransitionForResize()
     onTrackIdentityChanged:if(ready)cancelTransitionForResize()
-    function cancelTransitionForResize(){if(!ready||!changingLayout)return;++transitionGeneration;layoutMotion.stop();transitionProgress=1;changingLayout=false}
+    function cancelTransitionForResize(){if(!ready)return;++transitionGeneration;layoutMotion.stop();transitionProgress=1;changingLayout=false;Qt.callLater(polishLayout)}
+    function polishLayout(){slots.ensurePolished()}
     Component.onCompleted:ready=true
     NumberAnimation{id:layoutMotion;target:canvas;property:"transitionProgress";from:0;to:1;duration:460;easing.type:Easing.InOutCubic;onFinished:canvas.changingLayout=false}
     Binding{target:canvas;property:"textAlignment";value:canvas.changingLayout?canvas.mix(canvas.fromGeometry.alignment,canvas.toGeometry.alignment):canvas.split?1:0}
@@ -96,7 +100,7 @@ Item {
             id: coverSlot
             Layout.row:0;Layout.column:0;Layout.rowSpan:canvas.split?2:1
             Layout.fillWidth:true;Layout.fillHeight:canvas.split||!canvas.lyricsMode
-            Layout.preferredWidth:canvas.split?slots.width*.46:slots.width
+            Layout.preferredWidth:canvas.split?(slots.width-slots.columnSpacing)*canvas.artworkShare:slots.width
             Layout.preferredHeight:canvas.split?slots.height:canvas.lyricsMode?Math.min(180,slots.height*.32):Math.max(110,slots.height-metadata.implicitHeight-(canvas.displayingLyrics?74:0)-20)
             Layout.minimumHeight:90
         }
@@ -105,7 +109,7 @@ Item {
             Layout.topMargin:canvas.split&&canvas.lyricsMode?28:0
             Layout.row:canvas.split?0:1;Layout.column:canvas.split?1:0
             Layout.fillWidth:true;Layout.fillHeight:canvas.split&&!canvas.lyricsMode
-            Layout.preferredWidth:canvas.split?slots.width*.49:slots.width
+            Layout.preferredWidth:canvas.split?(slots.width-slots.columnSpacing)*(1-canvas.artworkShare):slots.width
             Layout.preferredHeight:metadata.implicitHeight
             Layout.minimumHeight:metadata.implicitHeight
         }
@@ -124,7 +128,7 @@ Item {
     readonly property rect coverGeometry:geometry("cover",coverTarget)
     readonly property rect metadataGeometry:geometry("metadata",metadataTarget)
     readonly property rect lyricGeometry:geometry("lyrics",lyricTarget)
-    readonly property real artworkExtent:Math.max(80,Math.min(coverSlot.width,coverSlot.height,mode===1?620:split?440:460))
+    readonly property real artworkExtent:Math.max(1,Math.min(coverSlot.width,coverSlot.height,Math.min(split?(slots.width-slots.columnSpacing)*.46:coverSlot.width,coverSlot.height,mode===1?620:split?440:460)*artworkScale))
     CoverArtwork {
         id: artwork;objectName:"heroArtwork"
         width:canvas.coverGeometry.width;height:canvas.coverGeometry.height

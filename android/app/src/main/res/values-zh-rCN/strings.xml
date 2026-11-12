@@ -55,10 +55,23 @@
   <string name="ready_to_pair">在电脑上选择这部手机</string>
   <string name="recommended_settings">推荐设置</string>
   <string name="startup_settings">启动设置</string>
-  <string name="startup_help">不同手机的启动管理有所不同，请在应用设置中检查后台与自启动选项。</string>
+  <string name="startup_help">开启重启后启动，并检查手机的应用自启动与后台设置。Android 不提供厂商自启动权限状态，检查后请点击完成。</string>
   <string name="done">完成</string>
   <string name="codes_match">数字一致，连接</string>
   <string name="compare_sas">仅当电脑显示相同数字时连接。</string>
   <string name="liquid_glass">液态玻璃</string>
   <string name="liquid_glass_help">使用 Kyant Backdrop 的光学折射与模糊效果。需要 Android 13 或更高版本；旧版使用 Material 表面。</string>
+  <string name="connection_background">连接与后台</string>
+  <string name="media_settings">媒体</string>
+  <string name="appearance_settings">外观</string>
+  <string name="app_settings">应用</string>
+  <string name="reset_warning">将重置外观、语言和播放器偏好，已配对电脑的授权会保留。</string>
+  <string name="notification_permission">连接通知</string>
+  <string name="guide_progress">%1$d / %2$d</string>
+  <string name="guide_media">允许媒体访问以同步当前歌曲与播放控制，不读取通知消息。若 Android 限制此权限，请先在应用详情中允许受限制的设置。</string>
+  <string name="guide_notifications">允许连接通知，便于查看服务运行状态。</string>
+  <string name="guide_battery">在电池设置中选择 DroidMediaLink，允许不受限的后台活动。检测到已解除电池优化后会自动进入下一步。</string>
+  <string name="settings_unavailable">此手机无法打开该设置页面，可以跳过此项。</string>
+  <string name="open_settings">前往设置</string>
+  <string name="skip">跳过</string>
 </resources>

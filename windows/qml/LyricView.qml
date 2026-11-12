@@ -73,7 +73,7 @@ Item {
   required property color inkColor
   property bool highlight:false
   TextMetrics{id:measure;font:glyph.metricsFace;text:glyph.value}
-  width:Math.max(1,Math.min(limit,Math.ceil(measure.advanceWidth)+1))
+  width:Math.max(1,Math.min(limit,measure.advanceWidth))
   height:Math.max(view.fontSize*view.option("lineHeight",1.25),layoutSizer.implicitHeight)
   Text{id:layoutSizer;visible:false;width:glyph.width;text:glyph.value;textFormat:Text.PlainText;font:glyph.metricsFace;wrapMode:Text.NoWrap;lineHeight:view.option("lineHeight",1.25)}
   Text {id:base;visible:!glyph.highlight;width:glyph.width;text:glyph.value;textFormat:Text.PlainText;font:glyph.face;wrapMode:Text.NoWrap;elide:view.longLine==="elide"?Text.ElideRight:Text.ElideNone;color:glyph.inkColor;renderType:view.rendering;renderTypeQuality:104;lineHeight:view.option("lineHeight",1.25)}
@@ -110,7 +110,7 @@ Item {
   readonly property font measureFace:Qt.font({family:type.resolvedFamily(rowItem.row.text||"",view.fontFamily),pixelSize:view.fontSize,weight:Math.max(view.fontWeight,view.activeWeight),letterSpacing:view.option("letterSpacing",0),contextFontMerging:true,preferTypoLineMetrics:true,hintingPreference:Font.PreferNoHinting})
   TextMetrics{id:fullMeasure;font:rowItem.measureFace;text:rowItem.row.text||""}
   readonly property real shrink:view.longLine==="shrink"?Math.max(view.option("minimumScale",.65),Math.min(1,layoutWidth/Math.max(1,flowWidth))):1
-  readonly property real naturalWidth:Math.max(1,fullMeasure.advanceWidth+chunks.length*2)
+  readonly property real naturalWidth:Math.max(1,fullMeasure.advanceWidth)
   readonly property real flowWidth:view.longLine==="wrap"?Math.min(layoutWidth,naturalWidth):naturalWidth
   readonly property real sourceWidth:view.longLine==="elide"?Math.min(layoutWidth,naturalWidth):flowWidth
   readonly property color baseColor:selected?view.colorOption("unsungColor",view.inactiveColor):view.untimed?view.textColor:past?view.colorOption("pastColor",view.inactiveColor):view.colorOption("futureColor",view.inactiveColor)

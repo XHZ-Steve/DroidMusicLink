@@ -34,15 +34,15 @@ Item {
     onSourceChanged:{retryAttempts=0;reloadRetry.stop();load()}
     // Keep the outgoing image opaque underneath; opposing alpha animations
     // would expose the background and darken the cover halfway through a fade.
-    Item{id:artworkContent;anchors.fill:parent;visible:false
-    Image {id:a;anchors.fill:parent;asynchronous:true;retainWhileLoading:true;fillMode:Image.PreserveAspectFit;visible:cover.front===0||cover.blend<1;z:cover.front===0?1:0;opacity:cover.front===0?cover.blend:1
+    RectangularShadow {anchors.fill:parent;visible:cover.ready;offset:Qt.vector2d(0,12);blur:32;radius:4;color:Qt.rgba(cover.ambientColor.r*.32,cover.ambientColor.g*.32,cover.ambientColor.b*.32,.34)}
+    Item{id:artworkContent;anchors.fill:parent
+    Image {id:a;anchors.fill:parent;asynchronous:true;smooth:true;mipmap:true;retainWhileLoading:true;fillMode:Image.PreserveAspectFit;visible:cover.front===0||cover.blend<1;z:cover.front===0?1:0;opacity:cover.front===0?cover.blend:1
         onStatusChanged:if(status===Image.Ready && source===cover.pending){cover.retryAttempts=0;reloadRetry.stop();cover.present(0)}else if(status===Image.Error&&source===cover.pending)cover.retryFailed()
     }
-    Image {id:b;anchors.fill:parent;asynchronous:true;retainWhileLoading:true;fillMode:Image.PreserveAspectFit;visible:cover.front===1||cover.blend<1;z:cover.front===1?1:0;opacity:cover.front===1?cover.blend:1
+    Image {id:b;anchors.fill:parent;asynchronous:true;smooth:true;mipmap:true;retainWhileLoading:true;fillMode:Image.PreserveAspectFit;visible:cover.front===1||cover.blend<1;z:cover.front===1?1:0;opacity:cover.front===1?cover.blend:1
         onStatusChanged:if(status===Image.Ready && source===cover.pending){cover.retryAttempts=0;reloadRetry.stop();cover.present(1)}else if(status===Image.Error&&source===cover.pending)cover.retryFailed()
     }
     }
-    MultiEffect {anchors.fill:parent;source:artworkContent;visible:cover.ready;shadowEnabled:true;shadowColor:Qt.rgba(cover.ambientColor.r*.32,cover.ambientColor.g*.32,cover.ambientColor.b*.32,.34);shadowBlur:.8;shadowVerticalOffset:12;shadowHorizontalOffset:0;shadowScale:1.025;autoPaddingEnabled:true;blurMax:32}
     Text{anchors.centerIn:parent;visible:!cover.ready;text:"♪";font.family:"Segoe UI";font.pixelSize:Math.max(40,Math.min(80,cover.width*.2));color:cover.ambientColor;opacity:.5}
     Button{objectName:"coverLayoutSwitch";anchors.fill:parent;text:cover.actionText;Accessible.name:text;hoverEnabled:true;background:Rectangle{color:"transparent";radius:4;border.width:parent.visualFocus?2:0;border.color:cover.ambientColor}contentItem:Item{}
  onClicked:cover.activated();ToolTip.visible:hovered;ToolTip.delay:900;ToolTip.text:text}

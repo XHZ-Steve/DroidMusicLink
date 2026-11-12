@@ -3,6 +3,14 @@
 // Extraction catalog for descriptor macro labels and stored enum values.
 namespace SettingsStrings {
 inline const char *const labels[]={
+ QT_TRANSLATE_NOOP("Settings","Home artwork scale"),
+ QT_TRANSLATE_NOOP("Settings","Playback dock shape"),
+ QT_TRANSLATE_NOOP("Settings","Play button style"),
+ QT_TRANSLATE_NOOP("Settings","rounded"),
+ QT_TRANSLATE_NOOP("Settings","capsule"),
+ QT_TRANSLATE_NOOP("Settings","solid"),
+ QT_TRANSLATE_NOOP("Settings","water"),
+
  QT_TRANSLATE_NOOP("Settings","Animations"),
  QT_TRANSLATE_NOOP("Settings","Auto-hide window controls"),
  QT_TRANSLATE_NOOP("Settings","Automatic matching"),
