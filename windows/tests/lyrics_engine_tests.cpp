@@ -10,6 +10,8 @@
 #include <QJsonDocument>
 #include <QTimer>
 #include <QDebug>
+#include <QBuffer>
+#include <QImage>
 
 class LoopbackProviderNetwork:public QNetworkAccessManager {
 public:quint16 port=0;
@@ -24,6 +26,16 @@ public:
   const auto metadata=QJsonObject{{"title","TEST ONLY lyric engine A"},{"artist","TEST fixture"},{"album","TEST"},{"durationMs",0},{"state","paused"}};
   bridge.applyMedia(metadata);const auto unknownDurationKey=bridge.m_lyricKey;
   bridge.applyMedia({{"durationMs",30000}});if(unknownDurationKey==bridge.m_lyricKey||bridge.m_lyricKey!=bridge.lyricKey())return 1;
+  static QJsonObject nativePayload;
+  bridge.m_nativeUpdate=[](const char* json){nativePayload=QJsonDocument::fromJson(json).object();return 0;};
+  auto artwork=[](QColor color){QImage image(12,12,QImage::Format_RGB32);image.fill(color);QByteArray bytes;QBuffer output(&bytes);output.open(QIODevice::WriteOnly);image.save(&output,"PNG");return QString::fromLatin1(bytes.toBase64());};
+  bridge.applyMedia({{"artwork",artwork(Qt::red)}});const auto firstRevision=nativePayload["artworkRevision"].toString();
+  const auto nativePath=nativePayload["artwork"].toString();
+  if(firstRevision.isEmpty()||nativePath.contains('/')||nativePath.contains('?')||!QFile::exists(nativePath))return 70;
+  bridge.applyMedia({{"positionMs",100}});if(nativePayload["artworkRevision"]!=firstRevision)return 71;
+  bridge.applyMedia({{"artwork",artwork(Qt::blue)}});if(nativePayload["artworkRevision"]==firstRevision||nativePayload["artworkRevision"].toString().isEmpty())return 72;
+  bridge.applyMedia({{"artwork",""}});if(!nativePayload["artwork"].toString().isEmpty()||!nativePayload["artworkRevision"].toString().isEmpty())return 73;
+  bridge.m_nativeUpdate=nullptr;
   auto write=[&](QString name,QString text){QFile file(files.path()+"/"+name);if(!file.open(QIODevice::WriteOnly))return QUrl();file.write(text.toUtf8());file.close();return QUrl::fromLocalFile(file.fileName());};
   const auto first=write("first.lrc","[00:01.00]TEST FIRST\n[00:05.00]TEST SECOND");
   bridge.importLyrics(first);if(bridge.lyrics().size()!=2)return 2;

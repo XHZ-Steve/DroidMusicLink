@@ -8,5 +8,5 @@ $developerShell = Join-Path $installation 'Common7/Tools/Launch-VsDevShell.ps1'
 New-Item -ItemType Directory -Force $OutputDirectory | Out-Null
 $destination = (Resolve-Path $OutputDirectory).Path
 $source = Join-Path $PSScriptRoot '../windows/native/WindowsNative.cpp'
-& cl.exe /nologo /std:c++20 /EHsc /MT /O2 /LD /DUNICODE /D_UNICODE $source "/Fo:$destination/WindowsNative.obj" /link windowsapp.lib runtimeobject.lib "/OUT:$destination/WindowsNative.dll" "/IMPLIB:$destination/WindowsNative.lib"
+& cl.exe /nologo /std:c++20 /EHsc /MT /O2 /LD /utf-8 /DUNICODE /D_UNICODE $source "/Fo:$destination/WindowsNative.obj" /link windowsapp.lib runtimeobject.lib shcore.lib shlwapi.lib "/OUT:$destination/WindowsNative.dll" "/IMPLIB:$destination/WindowsNative.lib"
 if ($LASTEXITCODE) { throw "Native bridge build failed ($LASTEXITCODE)." }
