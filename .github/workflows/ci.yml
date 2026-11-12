@@ -25,6 +25,9 @@ jobs:
           distribution: temurin
           java-version: '17'
       - uses: android-actions/setup-android@v3
+        with:
+          # The action's v3 default also requests the retired SDK "tools" package.
+          packages: 'platform-tools platforms;android-36'
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.14.3'
@@ -38,11 +41,19 @@ jobs:
     runs-on: windows-2022
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
       - uses: jurplel/install-qt-action@v4
         with:
+          setup-python: false
           version: '6.11.1'
           arch: win64_msvc2022_64
-          modules: qtwebsockets
+          modules: qtwebsockets qtshadertools
+          # Released aqt 3.3.0 uses the old, unsplit Qt repository layout.
+          # Pin the verified upstream revision that understands Qt 6.11's arch repositories.
+          aqtsource: 'git+https://github.com/miurahr/aqtinstall.git@5a49f2b391ae8ee1d3c0dd87f8b33c1d49a4deb7'
+          py7zrversion: '==1.1.3'
           cache: true
       - uses: ilammy/msvc-dev-cmd@v1
         with:
