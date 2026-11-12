@@ -27,3 +27,15 @@ braccato (MIT), EasyDesktopLyrics (MIT) and musebase (MPL-2.0) were reviewed as 
 Additional independent review could not run after the existing agents exhausted their account quota. This final integration is backed by executed tests and direct GUI inspection, not a claimed new independent review. Mixed-DPI monitor migration, HDR, all drivers and a prolonged overnight soak remain unverified. Only LRCLIB is integrated as an online provider; translation/romanization/word timing depend on the lyric data supplied. Installers remain unsigned.
 
 Raw reports and screenshots are under `artifacts/`: `native-frame-integrated.json`, `tray-latency-integrated.json`, `live-integrated/transport-report.json`, `lyrics-soak-integrated-v2/`, `audit-current-{100,150,200}/` and `ui-refinement-review/`.
+
+## Resize/performance measurements on the final integration
+
+Each run changed the real window size 240 times with synchronous screenshot readback. CPU is percent of **one core**, not whole-machine CPU. Presented-frame intervals are not GPU render duration. These are stress diagnostics, not steady playback benchmarks.
+
+| DPR | Texture/geometry mismatches | Dock center error | Background max adjacent-channel delta | Frame interval P95 | CPU / one core | Working set | Hidden CPU / one core |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| 1.0 | 0 | 0.5px | 1 | 12.94ms | 25.51% | 176.90MiB | 0.78% |
+| 1.5 | 0 | 0.5px | 1 | 13.05ms | 34.56% | 188.05MiB | 0.78% |
+| 2.0 | 0 | 0.5px | 1 | 13.49ms | 39.18% | 183.84MiB | 0.00% |
+
+Thirteen final isolated Qt captures cover warm/cool/saturated/monochrome/pale artwork, light/dark, narrow/minimum, settings, discovery popup, floating player and tray. Previews do not fabricate production song metadata. The final real-phone playing capture is in `docs/screenshots/refinement/`.

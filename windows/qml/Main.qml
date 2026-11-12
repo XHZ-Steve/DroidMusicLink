@@ -143,7 +143,7 @@ ApplicationWindow {
             text: backend.playing ? qsTr("Pause") : qsTr("Play"); Accessible.name: backend.playing ? qsTr("Pause") : qsTr("Play")
             enabled: supports(backend.playing?"pause":"play") || supports("toggle")
             implicitWidth: controls.compact?44:48; implicitHeight: implicitWidth; font.pixelSize: 24
-            background: Rectangle { radius: width/2; color: root.accent; opacity: parent.enabled?(parent.down?.75:1):.3 }
+            background: Rectangle { radius: width/2; color: root.accent; border.width:parent.visualFocus?2:0;border.color:root.fg; opacity: parent.enabled?(parent.down?.75:1):.3 }
             contentItem: Text { text: Icons.glyph(backend.playing?"pause":"play"); color: design.accentText; font.family:lucide.name; font.pixelSize:26; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
             onClicked: backend.command(supports("toggle")?"toggle":backend.playing?"pause":"play")
         }

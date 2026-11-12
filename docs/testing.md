@@ -166,3 +166,7 @@ The final redesigned Windows package also passed system-only-PATH portable launc
 
 See `windows-ui-design.md` for the final design, component integration, screenshots, measured CPU/memory/frame-cadence results and remaining platform coverage. The implementation was built and run, including native mouse edge resizing, maximize/restore, actual theme clicks, isolated real-album color tests, settings end-scroll and authenticated phone playback-control state verification. Raw artifacts remain in `artifacts/ui-review`, `artifacts/ui-live-transport`, `artifacts/ui-profiles/bindings`, and `artifacts/ui-audit-{100,150,200}`. Test artwork/lyrics previews are explicitly isolated and do not synthesize production media state.
 
+
+## Windows lyrics, navigation and native-frame refinement — 2026-11-12
+
+See `windows-refinement-2026-11-12.md` for current integration tests, measured tray latency and resize stress results. Earlier UI reports describe their original build, not this revision.
