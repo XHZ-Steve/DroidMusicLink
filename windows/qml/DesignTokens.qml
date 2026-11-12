@@ -5,6 +5,14 @@ QtObject {
     property bool motion: true
     property color accent: "#bac9ed"
     readonly property string family: "Microsoft YaHei UI"
+    readonly property string displayFamily: "Segoe UI Variable Display"
+    readonly property string cjkFallback: "Microsoft YaHei UI"
+    readonly property int regularWeight: 400
+    readonly property int mediumWeight: 500
+    readonly property int displayWeight: 600
+    readonly property real textLineHeight: 1.25
+    readonly property int staticTextRendering: Text.NativeRendering
+    readonly property int animatedTextRendering: Text.CurveRendering
     readonly property int caption: 12
     readonly property int body: 14
     readonly property int heading: 24

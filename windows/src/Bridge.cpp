@@ -49,6 +49,7 @@ Bridge::Bridge(QObject *parent):QObject(parent),m_status(tr("Disconnected")){
  // TLS 1.2 retains certificate/SAS verification and the platform cipher policy.
  auto linkTls=m_socket.sslConfiguration();linkTls.setProtocol(QSsl::TlsV1_2);m_socket.setSslConfiguration(linkTls);
  if(!m_settings.contains("identity/clientId"))m_settings.setValue("identity/clientId",QUuid::createUuid().toString(QUuid::WithoutBraces));
+ m_lyricProviders=new LyricProviders(&m_network,this);m_lyricProviders->changed=[this]{emit lyricProvidersChanged();};connect(this,&Bridge::settingsChanged,this,[this]{emit lyricProvidersChanged();});
  m_socket.setMaxAllowedIncomingMessageSize(4*1024*1024);m_socket.setMaxAllowedIncomingFrameSize(4*1024*1024);
  connect(&m_socket,&QWebSocket::sslErrors,this,[this](const QList<QSslError>&errors){
   const auto cert=m_socket.sslConfiguration().peerCertificate();const auto actual=QString::fromLatin1(cert.digest(QCryptographicHash::Sha256).toHex());
@@ -89,7 +90,7 @@ Bridge::Bridge(QObject *parent):QObject(parent),m_status(tr("Disconnected")){
  }); refreshDevices();
  const auto saved=m_settings.value("connection/url").toString();if(!saved.isEmpty()&&setting("connection/autoReconnect",true).toBool()){QTimer::singleShot(0,this,&Bridge::discover);QTimer::singleShot(800,this,[this]{connectDevice(m_settings.value("connection/url").toString());});}
 }
-Bridge::~Bridge(){if(nativeOwner==this){nativeOwner=nullptr;using Shutdown=void(*)();if(auto shutdown=reinterpret_cast<Shutdown>(m_native.resolve("dml_smtc_shutdown")))shutdown();}}
+Bridge::~Bridge(){cancelLyricRequest();if(m_lyricProviders){m_lyricProviders->changed={};delete m_lyricProviders;m_lyricProviders=nullptr;}if(nativeOwner==this){nativeOwner=nullptr;using Shutdown=void(*)();if(auto shutdown=reinterpret_cast<Shutdown>(m_native.resolve("dml_smtc_shutdown")))shutdown();}}
 QString Bridge::deviceKey(QString url)const{for(const auto &key:m_settings.allKeys())if(key.startsWith("devices/")&&key.endsWith("/url")&&m_settings.value(key).toString()==url)return key.chopped(4);return "devices/"+QString::fromLatin1(QCryptographicHash::hash(url.toUtf8(),QCryptographicHash::Sha256).toHex());}
 QByteArray Bridge::token()const{return protect(QByteArray::fromBase64(m_settings.value(deviceKey(m_url)+"/credential").toByteArray()),true);}
 bool Bridge::storeToken(QByteArray bytes){if(!m_compareReady||m_deviceId.isEmpty()||m_observedPin.isEmpty())return false;const auto encrypted=protect(bytes,false);if(encrypted.isEmpty())return false;const auto key="devices/"+m_deviceId;const auto previous=deviceKey(m_url);if(previous!=key)m_settings.remove(previous);m_settings.setValue(key+"/credential",encrypted.toBase64());m_settings.setValue(key+"/fingerprint",m_observedPin);m_settings.setValue(key+"/url",m_url);m_settings.setValue(key+"/name",m_deviceName);m_settings.setValue(key+"/deviceId",m_deviceId);m_settings.setValue("connection/url",m_url);m_pin=m_observedPin;refreshDevices();return true;}
@@ -122,10 +123,10 @@ void Bridge::receive(QString message){if(message.toUtf8().size()>4*1024*1024){m_
 QStringList Bridge::commands()const{QStringList list;for(const auto&v:m_media.value("commands").toArray())list<<v.toString();return list;}
 qint64 Bridge::position()const{qint64 value=m_position;if(playing()&&m_anchor.isValid())value+=qint64(m_anchor.elapsed()*qBound(-16.,m_media.value("speed").toDouble(1),16.));return qBound<qint64>(0,value,duration()>0?duration():std::numeric_limits<qint64>::max());}
 int Bridge::currentLine()const{return m_currentLyricLine;}
-void Bridge::setLyrics(QVariantList rows,QString source){m_lyrics=std::move(rows);m_lyricSource=std::move(source);m_lyricsLoading=false;m_lyricTimes.clear();m_lyricTimes.reserve(m_lyrics.size());if(m_lyrics.isEmpty()||!m_lyrics.first().toMap().value("untimed").toBool())for(const auto &row:m_lyrics)m_lyricTimes<<row.toMap().value("time").toLongLong();emit lyricsChanged();updateLyricClock();}
+void Bridge::setLyrics(QVariantList rows,QString source){m_lyrics=LyricTimeline::validated(rows);m_lyricSource=std::move(source);m_lyricsLoading=false;m_lyricTimes.clear();m_lyricTimes.reserve(m_lyrics.size());if(m_lyrics.isEmpty()||!m_lyrics.first().toMap().value("untimed").toBool())for(const auto &row:m_lyrics)m_lyricTimes<<row.toMap().value("time").toLongLong();emit lyricsChanged();updateLyricClock();}
 void Bridge::updateLyricClock(){const auto line=LyricTimeline::lineAt(m_lyricTimes,lyricPosition());if(line!=m_currentLyricLine){m_currentLyricLine=line;emit lyricLineChanged();}emit lyricProgressChanged();const bool run=m_uiVisible&&!m_lyricSurfaces.isEmpty()&&playing()&&!m_lyrics.isEmpty();if(run&&!m_lyricClock.isActive())m_lyricClock.start();else if(!run)m_lyricClock.stop();}
 void Bridge::setLyricsVisible(QString surface,bool visible){if(surface.size()>100)return;if(visible)m_lyricSurfaces.insert(surface);else m_lyricSurfaces.remove(surface);updateLyricClock();}
-void Bridge::cancelLyricRequest(){++m_lyricGeneration;if(m_lyricReply){auto reply=m_lyricReply;m_lyricReply=nullptr;reply->abort();}m_lyricsLoading=false;}
+void Bridge::cancelLyricRequest(){++m_lyricGeneration;if(m_lyricProviders)m_lyricProviders->cancel();if(m_lyricReply){auto reply=m_lyricReply;m_lyricReply=nullptr;reply->abort();}m_lyricsLoading=false;}
 
 void Bridge::command(QString name,double value){if(!QStringList{"play","pause","toggle","next","previous","seek","volume"}.contains(name))return;if(!m_online||m_pending.size()>=64)return;static QElapsedTimer limit;static int burst=0;if(!limit.isValid()||limit.elapsed()>1000){limit.restart();burst=0;}if(++burst>20)return;QString capability=name=="toggle"?(playing()?"pause":"play"):name;if(!commands().contains(capability)&&!commands().contains(name)){emit notification(tr("Command unavailable"));return;}if(!std::isfinite(value))return;const auto id=QUuid::createUuid().toString(QUuid::WithoutBraces);QJsonObject p{{"requestId",id},{"command",name},{"value",value}};if(name=="seek"){value=qBound(0.,value,double(duration()));p["positionMs"]=value;p["value"]=value;}if(name=="volume")p["volume"]=qBound(0.,value,1.);m_pending[id]=QDateTime::currentMSecsSinceEpoch();send("command_request",p);}
 void Bridge::applyMedia(QJsonObject media){
@@ -163,11 +164,12 @@ void Bridge::previewCoverForTest(QString path){
 bool Bridge::initializeNative(quintptr hwnd){m_native.setFileName(QCoreApplication::applicationDirPath()+"/WindowsNative.dll");using Init=int(*)(void*,void(*)(const char*,double));auto init=reinterpret_cast<Init>(m_native.resolve("dml_smtc_init"));m_nativeUpdate=reinterpret_cast<NativeUpdate>(m_native.resolve("dml_smtc_update"));if(!init||!m_nativeUpdate){emit notification(tr("System media bridge unavailable"));return false;}nativeOwner=this;if(init(reinterpret_cast<void*>(hwnd),nativeCommand)!=1){emit notification(tr("System media controls unavailable"));m_nativeUpdate=nullptr;return false;}updateNative();return true;}void Bridge::updateNative(){if(m_nativeUpdate){auto media=m_media;media["online"]=m_online&&setting("media/smtc",true).toBool();media["positionMs"]=position();media["artwork"]=QUrl(m_artwork).toLocalFile();const auto json=QJsonDocument(media).toJson(QJsonDocument::Compact);m_nativeStatus=m_nativeUpdate(json.constData());}}
 #include "SettingsBackend.inc"
 void Bridge::exportSettings(QUrl url){
- QJsonObject preferences,appearance;for(const auto &key:m_settings.allKeys()){
+ QJsonObject preferences,appearance,presets;for(const auto &key:m_settings.allKeys()){
   if(key.startsWith("preferences/"))preferences[key.mid(12)]=QJsonValue::fromVariant(m_settings.value(key));
   else if(key.startsWith("appearance/"))appearance[key.mid(11)]=QJsonValue::fromVariant(m_settings.value(key));
+  else if(key.startsWith("lyricPresets/custom/"))presets[key.mid(QStringLiteral("lyricPresets/custom/").size())]=QJsonValue::fromVariant(m_settings.value(key));
  }
- QSaveFile file(url.toLocalFile());if(file.open(QIODevice::WriteOnly)){file.write(QJsonDocument(QJsonObject{{"schemaVersion",2},{"preferences",preferences},{"appearance",appearance}}).toJson());file.commit();}
+ QSaveFile file(url.toLocalFile());if(file.open(QIODevice::WriteOnly)){file.write(QJsonDocument(QJsonObject{{"schemaVersion",2},{"preferences",preferences},{"appearance",appearance},{"lyricPresets",presets}}).toJson());file.commit();}
 }
 void Bridge::importSettings(QUrl url){
  QFile file(url.toLocalFile());if(!file.open(QIODevice::ReadOnly)||file.size()>1024*1024)return;
@@ -176,6 +178,9 @@ void Bridge::importSettings(QUrl url){
  const auto preferences=doc.value("preferences").toObject();for(auto i=preferences.begin();i!=preferences.end();++i)if(i.value().isBool()||i.value().isDouble()||i.value().isString())setSetting(i.key(),i.value().toVariant());
  const auto appearance=doc.value("appearance").toObject();
  if(version==2){applyAppearancePreset(appearance.value("preset").toString("balanced"));for(auto i=appearance.begin();i!=appearance.end();++i){const auto parts=i.key().split('/');if(parts.size()!=2)continue;if(parts[1]=="inherit")setAppearanceInherited(parts[0],i.value().toBool(true));else setAppearance(parts[0],parts[1],i.value().toVariant());}}
+ const auto presets=doc.value("lyricPresets").toObject();int imported=0;
+ for(auto it=presets.begin();it!=presets.end()&&imported<50;++it){const auto row=it.value().toObject();const auto name=row.value("name").toString();if(!validLyricPresetName(name)||builtinLyricPreset(name))continue;QVariantMap values;const auto input=row.value("values").toObject();for(auto value=input.begin();value!=input.end();++value){QVariant normalized;if(SettingsSchema::descriptor(value.key()).value("lyricStyle").toBool()&&SettingsSchema::normalize(value.key(),value.value().toVariant(),&normalized))values[value.key()]=normalized;}if(!values.isEmpty()){m_settings.setValue(lyricPresetKey(name),QVariantMap{{"name",name},{"values",values}});++imported;}}
+ emit settingsChanged();
 }
 void Bridge::forgetDevice(QString url){if(!url.contains("://"))url="wss://"+url;QUrl address(url);if(address.port()<0)address.setPort(18123);url=address.toString();if(url==m_url)disconnectDevice();m_settings.remove(deviceKey(url));for(int i=m_devices.size()-1;i>=0;--i)if(m_devices[i].toMap().value("url")==url)m_devices.removeAt(i);if(m_settings.value("connection/url")==url)m_settings.remove("connection/url");emit changed();}
 void Bridge::setUiVisible(bool visible){m_uiVisible=visible;if(visible)m_progress.start(250);else m_progress.stop();updateLyricClock();}
@@ -205,22 +210,71 @@ void Bridge::discover(){
 QVariantList Bridge::parseLyrics(const QString &text){return LyricTimeline::parse(text);}
 void Bridge::importLyrics(QUrl url){
  QFile file(url.toLocalFile());if(!file.open(QIODevice::ReadOnly)||file.size()>2*1024*1024){emit notification(tr("Unable to open lyrics"));return;}
- const auto text=QString::fromUtf8(file.readAll());auto rows=parseLyrics(text);if(rows.isEmpty()){emit notification(tr("Unable to open lyrics"));return;}
- cancelLyricRequest();m_lyricKey=lyricKey();
+ const auto text=LyricProviders::decodeLocal(file.readAll());auto rows=parseLyrics(text);if(rows.isEmpty()){emit notification(tr("Unable to open lyrics"));return;}
+ cancelLyricRequest();m_lyricKey=lyricKey();m_lyricProvider="local";m_lyricMatchScore=100;
  if(!title().isEmpty()){const auto identity=lyricIdentity();QSaveFile output(cachePath()+"/"+identity+".manual.lrc");if(output.open(QIODevice::WriteOnly)&&output.write(text.toUtf8())>=0&&output.commit())m_settings.setValue("lyrics/bindings/"+identity,QString("local"));}
  setLyrics(rows,"local");
 }
+LyricTrack Bridge::lyricTrack()const{return {title(),artist(),album(),m_media.value("packageName").toString(),duration()};}
+QVariantList Bridge::lyricProviders()const{auto rows=m_lyricProviders?m_lyricProviders->descriptors():QVariantList();for(auto &value:rows){auto row=value.toMap();row["enabled"]=setting(row.value("enabledKey").toString(),true).toBool();value=row;}return rows;}
+QStringList Bridge::lyricProviderOrder()const{
+ QStringList order;for(auto id:setting("lyrics/providerPriority","netease,qq,kugou,lrclib").toString().split(',')){id=id.trimmed();if(LyricProviders::ids().contains(id)&&!order.contains(id))order<<id;}
+ for(const auto &id:LyricProviders::ids())if(!order.contains(id))order<<id;
+ auto preferred=setting("lyrics/preferredProvider","auto").toString();
+ if(preferred=="auto"&&setting("lyrics/preferCurrentApp",true).toBool()){const auto package=m_media.value("packageName").toString().toLower();if(package.contains("netease"))preferred="netease";else if(package.contains("tencent")||package.contains("qqmusic"))preferred="qq";else if(package.contains("kugou"))preferred="kugou";}
+ if(order.contains(preferred)){order.removeAll(preferred);order.prepend(preferred);}
+ order.erase(std::remove_if(order.begin(),order.end(),[this](const auto &id){return !setting("lyrics/providers/"+id+"/enabled",true).toBool();}),order.end());return order;
+}
 void Bridge::fetchLyrics(){
- cancelLyricRequest();const auto key=lyricKey();m_lyricKey=key;setLyrics({},{});if(key.isEmpty())return;
+ cancelLyricRequest();const auto key=lyricKey();m_lyricKey=key;m_lyricProvider.clear();m_lyricMatchScore=0;setLyrics({},{});if(key.isEmpty())return;
  const auto identity=lyricIdentity();const auto binding=m_settings.value("lyrics/bindings/"+identity).toString();
+ const auto jsonName=!binding.isEmpty()?identity+".manual.json":key+".lyrics.json";
+ QFile jsonCache(cachePath()+"/"+jsonName);if(jsonCache.open(QIODevice::ReadOnly)&&jsonCache.size()<=2*1024*1024){const auto doc=QJsonDocument::fromJson(jsonCache.readAll()).object();const auto rows=LyricTimeline::validated(doc.value("rows").toArray().toVariantList());const bool identityMatches=!doc.contains("trackIdentity")||doc.value("trackIdentity").toString()==identity;const bool durationMatches=!binding.isEmpty()||!doc.contains("durationMs")||qAbs(doc.value("durationMs").toInteger()-duration())<=1500;if(!rows.isEmpty()&&identityMatches&&durationMatches){m_lyricProvider=doc.value("provider").toString();m_lyricMatchScore=doc.value("score").toDouble();setLyrics(rows,binding.isEmpty()?"cache":"manual");return;}}
  const auto cacheName=!binding.isEmpty()?identity+".manual.lrc":key+".lrc";
- QFile cached(cachePath()+"/"+cacheName);if(cached.open(QIODevice::ReadOnly)&&cached.size()<=2*1024*1024){auto rows=parseLyrics(QString::fromUtf8(cached.readAll()));if(!rows.isEmpty()){setLyrics(rows,binding.isEmpty()?"cache":"manual");return;}}
- if(m_embeddedKey==key&&!m_embeddedLyrics.isEmpty()&&binding.isEmpty()){auto rows=parseLyrics(m_embeddedLyrics);if(!rows.isEmpty()){setLyrics(rows,"phone");return;}}
+ QFile cached(cachePath()+"/"+cacheName);if(cached.open(QIODevice::ReadOnly)&&cached.size()<=2*1024*1024){auto rows=parseLyrics(QString::fromUtf8(cached.readAll()));if(!rows.isEmpty()){m_lyricProvider=binding=="local"?"local":"lrclib";m_lyricMatchScore=100;setLyrics(rows,binding.isEmpty()?"cache":"manual");return;}}
+ if(m_embeddedKey==key&&!m_embeddedLyrics.isEmpty()&&binding.isEmpty()){auto rows=parseLyrics(m_embeddedLyrics);if(!rows.isEmpty()){m_lyricProvider="phone";setLyrics(rows,"phone");return;}}
  if(!setting("lyrics/online",true).toBool()||!setting("lyrics/autoMatch",true).toBool())return;
- QUrl url("https://lrclib.net/api/get");
- if(!binding.isEmpty()&&binding!="local")url=QUrl("https://lrclib.net/api/get/"+binding);
- else {QUrlQuery query;query.addQueryItem("track_name",title());query.addQueryItem("artist_name",artist());if(!album().isEmpty())query.addQueryItem("album_name",album());if(duration()>=1000&&duration()<=3600000)query.addQueryItem("duration",QString::number(duration()/1000.));url.setQuery(query);}
- m_lyricsLoading=true;emit lyricsChanged();requestLyrics(url,key,m_lyricGeneration,!binding.isEmpty());
+ if(!binding.isEmpty()&&binding!="local"){
+  const auto json=QJsonDocument::fromJson(binding.toUtf8()).object();const auto provider=json.isEmpty()?QString("lrclib"):json.value("provider").toString();const auto id=json.isEmpty()?binding:json.value("sourceId").toString();
+  if(LyricProviders::ids().contains(provider)){bindLyricCandidate(provider,id);return;}
+ }
+ m_lyricsLoading=true;emit lyricsChanged();tryLyricProviders(lyricProviderOrder(),0,key,m_lyricGeneration);
+}
+void Bridge::tryLyricProviders(QStringList providers,int index,QString key,quint64 generation){
+ if(generation!=m_lyricGeneration||key!=lyricKey())return;
+ if(index>=providers.size()){m_lyricsLoading=false;emit lyricsChanged();return;}
+ const auto provider=providers[index];const auto track=lyricTrack();
+ m_lyricProviders->search(provider,title()+" "+artist(),[this,providers,index,key,generation,track](QList<LyricCandidate> candidates,QString){
+  if(generation!=m_lyricGeneration||key!=lyricKey())return;const bool strict=setting("lyrics/matchStrategy","strict").toString()!="balanced";
+  for(auto &candidate:candidates)candidate.score=LyricProviders::matchScore(track,candidate,strict);
+  std::stable_sort(candidates.begin(),candidates.end(),[](const auto&a,const auto&b){return a.score>b.score;});
+  for(const auto &candidate:candidates){bool exists=false;for(const auto &value:m_lyricResults){const auto row=value.toMap();if(row.value("provider")==candidate.provider&&row.value("sourceId")==candidate.id){exists=true;break;}}if(!exists&&m_lyricResults.size()<48)m_lyricResults<<candidate.toVariant();}emit lyricResultsChanged();
+  candidates.erase(std::remove_if(candidates.begin(),candidates.end(),[strict](const auto &candidate){return candidate.score<(strict?90.:80.);}),candidates.end());if(candidates.size()>3)candidates=candidates.mid(0,3);
+  tryLyricCandidates(candidates,0,providers,index+1,key,generation);
+ });
+}
+void Bridge::tryLyricCandidates(QList<LyricCandidate> candidates,int index,QStringList providers,int nextProvider,QString key,quint64 generation){
+ if(generation!=m_lyricGeneration||key!=lyricKey())return;if(index>=candidates.size()){tryLyricProviders(providers,nextProvider,key,generation);return;}
+ m_lyricProviders->fetch(candidates[index],[this,candidates,index,providers,nextProvider,key,generation](LyricDocument document,QString){if(generation!=m_lyricGeneration||key!=lyricKey())return;if(document.rows.isEmpty()){tryLyricCandidates(candidates,index+1,providers,nextProvider,key,generation);return;}acceptLyricDocument(document,false);if(setting("lyrics/crossSourceTranslation",false).toBool())supplementLyricTranslation(providers,nextProvider,key,generation);});
+}
+void Bridge::acceptLyricDocument(LyricDocument document,bool manual){
+ if(document.rows.isEmpty())return;m_lyricProvider=document.provider;m_lyricMatchScore=document.score;
+ const auto identity=lyricIdentity();const auto name=manual?identity+".manual.json":lyricKey()+".lyrics.json";
+ QSaveFile output(cachePath()+"/"+name);if(output.open(QIODevice::WriteOnly)){output.write(QJsonDocument(QJsonObject{{"schemaVersion",2},{"trackIdentity",identity},{"durationMs",duration()},{"provider",document.provider},{"sourceId",document.sourceId},{"score",document.score},{"rows",QJsonArray::fromVariantList(document.rows)}}).toJson(QJsonDocument::Compact));output.commit();}
+ if(manual)m_settings.setValue("lyrics/bindings/"+identity,QString::fromUtf8(QJsonDocument(QJsonObject{{"provider",document.provider},{"sourceId",document.sourceId}}).toJson(QJsonDocument::Compact)));
+ setLyrics(document.rows,manual?"manual":document.provider);
+}
+void Bridge::supplementLyricTranslation(QStringList providers,int index,QString key,quint64 generation){
+ if(generation!=m_lyricGeneration||key!=lyricKey()||index>=providers.size())return;
+ for(const auto &row:m_lyrics)if(!row.toMap().value("translation").toString().isEmpty())return;
+ const auto track=lyricTrack();m_lyricProviders->search(providers[index],title()+" "+artist(),[this,providers,index,key,generation,track](QList<LyricCandidate> candidates,QString){
+  if(generation!=m_lyricGeneration||key!=lyricKey())return;
+  auto found=std::find_if(candidates.begin(),candidates.end(),[&track](const auto &candidate){return LyricProviders::matchScore(track,candidate,true)>=98.;});
+  if(found==candidates.end()){supplementLyricTranslation(providers,index+1,key,generation);return;}
+  m_lyricProviders->fetch(*found,[this,providers,index,key,generation](LyricDocument document,QString){if(generation!=m_lyricGeneration||key!=lyricKey())return;auto rows=LyricTimeline::mergeDocumentAuxiliary(m_lyrics,document.rows,250,true);if(rows==m_lyrics){supplementLyricTranslation(providers,index+1,key,generation);return;}const auto source=m_lyricSource;setLyrics(rows,source);
+    const auto name=lyricKey()+".lyrics.json";QFile original(cachePath()+"/"+name);if(original.open(QIODevice::ReadOnly)){auto cached=QJsonDocument::fromJson(original.readAll()).object();original.close();cached["rows"]=QJsonArray::fromVariantList(rows);QSaveFile output(cachePath()+"/"+name);if(output.open(QIODevice::WriteOnly)){output.write(QJsonDocument(cached).toJson(QJsonDocument::Compact));output.commit();}}
+});
+ });
 }
 void Bridge::requestLyrics(QUrl url,QString key,quint64 generation,bool manual,bool searchFallback){
  if(QDateTime::currentMSecsSinceEpoch()<m_lyricRetryAfter){m_lyricsLoading=false;emit lyricsChanged();return;}
@@ -247,7 +301,7 @@ void Bridge::requestLyrics(QUrl url,QString key,quint64 generation,bool manual,b
   reply->deleteLater();
  });
 }
-void Bridge::clearLyricsCache(){cancelLyricRequest();QDir dir(cachePath());for(const auto &file:dir.entryList({"*.lrc"},QDir::Files))if(!file.endsWith(".manual.lrc"))dir.remove(file);m_lyricKey.clear();fetchLyrics();}
+void Bridge::clearLyricsCache(){cancelLyricRequest();QDir dir(cachePath());for(const auto &file:dir.entryList({"*.lrc","*.lyrics.json"},QDir::Files))if(!file.endsWith(".manual.lrc"))dir.remove(file);m_lyricKey.clear();fetchLyrics();}
 void Bridge::checkUpdates(){QNetworkRequest request(QUrl("https://api.github.com/repos/XHZ-Steve/DroidMusicLink/releases/latest"));request.setRawHeader("User-Agent","DroidMediaLink/0.1.0");request.setTransferTimeout(10000);auto reply=m_network.get(request);connect(reply,&QNetworkReply::downloadProgress,reply,[reply](qint64 received,qint64){if(received>2*1024*1024)reply->abort();});connect(reply,&QNetworkReply::finished,this,[this,reply]{if(reply->error()==QNetworkReply::NoError){auto obj=QJsonDocument::fromJson(reply->read(1024*1024)).object();auto tag=obj.value("tag_name").toString();if(!tag.isEmpty()&&tag!="v"+QCoreApplication::applicationVersion())emit updateAvailable(tag,obj.value("html_url").toString());else emit notification(tr("You are up to date"));}else emit notification(tr("No release available or network unavailable"));reply->deleteLater();});}
 
 
@@ -263,10 +317,17 @@ void Bridge::applyTheme(){
  color.setHslF(color.hslHueF(),qBound(.12,color.hslSaturationF(),.35),.68);m_accent=color.name();
 }
 void Bridge::searchLyrics(QString query){
- const auto generation=++m_searchGeneration;if(m_lyricSearchReply)m_lyricSearchReply->abort();m_lyricResults.clear();emit lyricResultsChanged();if(query.trimmed().size()<2)return;
- QUrl url("https://lrclib.net/api/search");QUrlQuery params;params.addQueryItem("q",query.trimmed().left(240));url.setQuery(params);QNetworkRequest request(url);request.setTransferTimeout(10000);request.setRawHeader("User-Agent","DroidMediaLink/0.1.0 (https://github.com/XHZ-Steve/DroidMusicLink)");auto reply=m_network.get(request);m_lyricSearchReply=reply;const auto key=lyricKey();connect(reply,&QNetworkReply::downloadProgress,reply,[reply](qint64 received,qint64){if(received>2*1024*1024)reply->abort();});
- connect(reply,&QNetworkReply::finished,this,[this,reply,generation,key]{if(generation==m_searchGeneration&&key==lyricKey()){if(reply->error()==QNetworkReply::NoError){for(const auto &record:QJsonDocument::fromJson(reply->read(2*1024*1024)).array()){const auto obj=record.toObject();m_lyricResults<<QVariantMap{{"id",obj.value("id").toInteger()},{"title",obj.value("trackName").toString()},{"artist",obj.value("artistName").toString()},{"album",obj.value("albumName").toString()},{"duration",obj.value("duration").toDouble()},{"synced",!obj.value("syncedLyrics").toString().isEmpty()}};if(m_lyricResults.size()>=20)break;}}else if(reply->error()!=QNetworkReply::OperationCanceledError)emit notification(tr("Lyrics search unavailable"));emit lyricResultsChanged();}if(m_lyricSearchReply==reply)m_lyricSearchReply=nullptr;reply->deleteLater();});
+ cancelLyricRequest();emit lyricsChanged();const auto generation=++m_searchGeneration;if(m_lyricSearchReply)m_lyricSearchReply->abort();m_lyricResults.clear();emit lyricResultsChanged();if(query.trimmed().size()<2)return;searchNextLyricProvider(query.trimmed().left(240),lyricProviderOrder(),0,lyricKey(),generation);
 }
-void Bridge::bindLyrics(qint64 id){
- if(id<=0||title().isEmpty())return;cancelLyricRequest();const auto key=lyricKey();m_lyricKey=key;m_lyricsLoading=true;emit lyricsChanged();requestLyrics(QUrl("https://lrclib.net/api/get/"+QString::number(id)),key,m_lyricGeneration,true);
+void Bridge::searchNextLyricProvider(QString query,QStringList providers,int index,QString key,quint64 generation){
+ if(generation!=m_searchGeneration||key!=lyricKey()||index>=providers.size())return;const auto track=lyricTrack();
+ m_lyricProviders->search(providers[index],query,[this,query,providers,index,key,generation,track](QList<LyricCandidate> candidates,QString){if(generation!=m_searchGeneration||key!=lyricKey())return;for(auto &candidate:candidates){candidate.score=LyricProviders::matchScore(track,candidate,true);if(m_lyricResults.size()<48)m_lyricResults<<candidate.toVariant();}emit lyricResultsChanged();searchNextLyricProvider(query,providers,index+1,key,generation);});
 }
+void Bridge::bindLyrics(qint64 id){if(id>0)bindLyricCandidate("lrclib",QString::number(id));}
+void Bridge::bindLyricCandidate(QString provider,QString sourceId){
+ if(!LyricProviders::ids().contains(provider)||sourceId.isEmpty()||sourceId.size()>128||title().isEmpty())return;cancelLyricRequest();m_lyricKey=lyricKey();const auto key=m_lyricKey;const auto generation=m_lyricGeneration;
+ LyricCandidate candidate{provider,sourceId,title(),artist(),album(),duration(),100,{}};for(const auto &value:m_lyricResults){const auto row=value.toMap();if(row.value("provider")==provider&&row.value("sourceId")==sourceId){candidate=LyricCandidate::fromVariant(row);candidate.score=100;break;}}
+ m_lyricsLoading=true;emit lyricsChanged();m_lyricProviders->fetch(candidate,[this,key,generation](LyricDocument document,QString error){if(generation!=m_lyricGeneration||key!=lyricKey())return;if(!document.rows.isEmpty())acceptLyricDocument(document,true);else {m_lyricsLoading=false;emit lyricsChanged();emit notification(tr("Lyrics unavailable"));}});
+}
+void Bridge::clearLyricBinding(){const auto identity=lyricIdentity();m_settings.remove("lyrics/bindings/"+identity);QFile::remove(cachePath()+"/"+identity+".manual.lrc");QFile::remove(cachePath()+"/"+identity+".manual.json");fetchLyrics();}
+void Bridge::testLyricProvider(QString provider){if(m_lyricProviders)m_lyricProviders->test(provider);}

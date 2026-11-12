@@ -42,9 +42,17 @@ Haze (Apache-2.0), FluentUI (MIT original repository),
 and braccato (MIT) were evaluated candidates, but are not bundled
 dependencies in this revision. Mica For Everyone source is not incorporated.
 
-LRCLIB is an optional external lyric service, not bundled software. Its returned
+LRCLIB, NetEase Music, QQ Music and Kugou are optional external lyric services, not bundled software. Their returned
 lyrics retain their respective owners' rights. No lyrics are included in this
 repository or mirrored by this project.
+
+The native lyric provider adapters, bounded format parsers, lyric ink/fade
+shaders and shared layout-transition clock are project implementations. No
+braccato, EasyDesktopLyrics, musebase or GPL lyric-project source is copied or
+linked. Their architectures/public format descriptions were research references.
+KRC decompression uses Qt Core's bundled zlib; its attribution is included in
+the deployed Qt third-party notices. Qt Concurrent is part of the dynamically
+linked Qt distribution; no browser runtime is introduced.
 
 QWindowKit is statically linked to this executable; Qt remains dynamically linked.
 Its Qt private API use is verified against the packaged Qt 6.11.1 build; rebuild

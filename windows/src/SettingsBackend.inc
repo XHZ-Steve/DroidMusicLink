@@ -28,6 +28,7 @@ QVariant Bridge::setting(QString key,QVariant fallback)const{
  if(key=="info/volume")return volumeKnown()?QString::number(qRound(volume()*100))+"%":tr("Unavailable");
  auto value=m_settings.value("preferences/"+key,fallback);if(!value.isValid())return value;
  QVariant normalized;if(SettingsSchema::normalize(key,value,&normalized))return normalized;
+ const auto descriptor=SettingsSchema::descriptor(key);if(!descriptor.isEmpty()&&descriptor["type"]!="readonly"&&descriptor["type"]!="action")return fallback;
  if(booleanSettings.contains(key))return value.toBool();if(key=="glass")return value.toDouble();
  if(QStringList{"lyricSize","lyrics/offset","floatX","floatY","lyricsX","lyricsY"}.contains(key))return value.toInt();
  return value;
@@ -41,9 +42,47 @@ void Bridge::setSetting(QString key,QVariant value){
  else return;
  m_settings.setValue("preferences/"+key,value);
  if(key=="general/autostart"){QSettings run("HKEY_CURRENT_USER\\Software\\Microsoft\\Windows\\CurrentVersion\\Run",QSettings::NativeFormat);if(value.toBool())run.setValue("DroidMediaLink","\""+QDir::toNativeSeparators(QCoreApplication::applicationFilePath())+"\" --hidden");else run.remove("DroidMediaLink");}
- if(key=="lyrics/online"||key=="lyrics/autoMatch"||key=="lyrics/providerPriority"){cancelLyricRequest();m_lyricKey.clear();fetchLyrics();}
+ if(key=="lyrics/online"||key=="lyrics/autoMatch"||key=="lyrics/providerPriority"||key=="lyrics/preferredProvider"||key=="lyrics/preferCurrentApp"||key=="lyrics/matchStrategy"||key=="lyrics/crossSourceTranslation"||key.startsWith("lyrics/providers/")){cancelLyricRequest();m_lyricKey.clear();fetchLyrics();}
  if(key=="connection/autoReconnect"&&!value.toBool())m_retry.stop();
  if(key=="theme/source"||key=="theme/brand"){applyTheme();emit changed();}
- updateNative();emit settingsChanged();
+ if(key=="media/smtc")updateNative();if(key.startsWith("lyrics/providers/"))emit lyricProvidersChanged();emit settingsChanged();
 }
 void Bridge::resetSettings(){m_settings.remove("preferences");m_settings.remove("appearance");m_settings.setValue("preferences/lyrics/autoMatchMigration",true);setSetting("general/autostart",false);cancelLyricRequest();m_lyricKey.clear();fetchLyrics();emit settingsChanged();}
+namespace {
+QString lyricPresetKey(const QString &name){return "lyricPresets/custom/"+QString::fromLatin1(name.toUtf8().toBase64(QByteArray::Base64UrlEncoding|QByteArray::OmitTrailingEquals));}
+bool validLyricPresetName(const QString &name){return !name.isEmpty()&&name==name.trimmed()&&name.size()<=64&&std::none_of(name.begin(),name.end(),[](QChar ch){return ch.unicode()<32;});}
+bool builtinLyricPreset(const QString &name){return QStringList{"soft","clear","contrast"}.contains(name);}
+QVariantMap defaultLyricStyle(){QVariantMap result;for(const auto &value:SettingsSchema::descriptors()){const auto row=value.toMap();if(row.value("lyricStyle").toBool())result[row["key"].toString()]=row["defaultValue"];}return result;}
+}
+QVariantList Bridge::lyricPresets()const{
+ QVariantList rows{QVariantMap{{"name","soft"},{"label",QCoreApplication::translate("Settings","Soft")},{"builtIn",true}},QVariantMap{{"name","clear"},{"label",QCoreApplication::translate("Settings","Clear")},{"builtIn",true}},QVariantMap{{"name","contrast"},{"label",QCoreApplication::translate("Settings","High contrast")},{"builtIn",true}}};
+ for(const auto &key:m_settings.allKeys())if(key.startsWith("lyricPresets/custom/")){const auto preset=m_settings.value(key).toMap();if(validLyricPresetName(preset["name"].toString()))rows<<QVariantMap{{"name",preset["name"]},{"label",preset["name"]},{"builtIn",false}};}
+ return rows;
+}
+void Bridge::saveLyricPreset(QString name){
+ if(!validLyricPresetName(name)||builtinLyricPreset(name))return;
+ if(lyricPresets().size()>=53&&!m_settings.contains(lyricPresetKey(name)))return;
+ auto values=defaultLyricStyle();for(auto it=values.begin();it!=values.end();++it)it.value()=setting(it.key(),it.value());
+ m_settings.setValue(lyricPresetKey(name),QVariantMap{{"name",name},{"values",values}});emit settingsChanged();
+}
+void Bridge::applyLyricPreset(QString name){
+ QVariantMap values;if(builtinLyricPreset(name)){
+  values=defaultLyricStyle();for(const auto &scope:QStringList{"lyrics/","desktopLyrics/"}){
+   if(name=="clear"){values[scope+"activeScale"]=1.;values[scope+"fontWeight"]=450;values[scope+"activeWeight"]=500;values[scope+"outlineWidth"]=0.;}
+   if(name=="contrast"){values[scope+"activeScale"]=1.14;values[scope+"activeWeight"]=650;values[scope+"pastOpacity"]=.56;values[scope+"futureOpacity"]=.48;values[scope+"outlineWidth"]=.75;}
+  }
+ }else values=m_settings.value(lyricPresetKey(name)).toMap().value("values").toMap();
+ if(values.isEmpty())return;
+ for(auto it=values.cbegin();it!=values.cend();++it){if(!SettingsSchema::descriptor(it.key()).value("lyricStyle").toBool())continue;QVariant normalized;if(SettingsSchema::normalize(it.key(),it.value(),&normalized))m_settings.setValue("preferences/"+it.key(),normalized);}
+ emit settingsChanged();
+}
+void Bridge::renameLyricPreset(QString oldName,QString newName){
+ if(!validLyricPresetName(newName)||builtinLyricPreset(oldName)||builtinLyricPreset(newName)||oldName==newName||m_settings.contains(lyricPresetKey(newName)))return;
+ auto preset=m_settings.value(lyricPresetKey(oldName)).toMap();if(preset.isEmpty())return;preset["name"]=newName;m_settings.setValue(lyricPresetKey(newName),preset);m_settings.remove(lyricPresetKey(oldName));emit settingsChanged();
+}
+void Bridge::deleteLyricPreset(QString name){if(builtinLyricPreset(name))return;m_settings.remove(lyricPresetKey(name));emit settingsChanged();}
+void Bridge::resetLyricSettings(QString scope){
+ if(!QStringList{"main","desktop","all"}.contains(scope))return;
+ for(const auto &value:SettingsSchema::descriptors()){const auto row=value.toMap();const auto key=row["key"].toString();if(row["lyricStyle"].toBool()&&(scope=="all"||key.startsWith(scope=="main"?"lyrics/":"desktopLyrics/")))m_settings.remove("preferences/"+key);}
+ emit settingsChanged();
+}

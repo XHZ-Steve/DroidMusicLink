@@ -11,6 +11,12 @@
 #include <QTimer>
 #include <QDebug>
 
+class LoopbackProviderNetwork:public QNetworkAccessManager {
+public:quint16 port=0;
+protected:QNetworkReply *createRequest(Operation operation,const QNetworkRequest &request,QIODevice *data)override{
+ QNetworkRequest local(request);QUrl url("http://127.0.0.1:"+QString::number(port)+"/"+request.url().host()+request.url().path());url.setQuery(request.url().query());local.setUrl(url);return QNetworkAccessManager::createRequest(operation,local,data);
+}
+};
 class LyricsEngineTests {
 public:
  static int run(){
@@ -37,8 +43,25 @@ public:
   // All cache and mapping material is isolated under the test app identity.
   const auto directory=bridge.cachePath();if(!directory.contains(QCoreApplication::applicationName()))return 10;
   QDir cache(directory);for(const auto &name:cache.entryList({"*.lrc"},QDir::Files))cache.remove(name);
+  // The real provider chain runs through a loopback transport: first source
+  // fails, QQ supplies a version/artist/duration-verified TEST lyric document.
+  QTcpServer chainServer;if(!chainServer.listen(QHostAddress::LocalHost,0))return 13;
+  QStringList requests;QObject::connect(&chainServer,&QTcpServer::newConnection,&chainServer,[&]{auto socket=chainServer.nextPendingConnection();QObject::connect(socket,&QTcpSocket::disconnected,socket,&QObject::deleteLater);QObject::connect(socket,&QTcpSocket::readyRead,socket,[&,socket]{const auto bytes=socket->readAll();if(bytes.isEmpty())return;const auto path=QString::fromUtf8(bytes.split(' ').value(1));requests<<path;QJsonObject response;bool failed=false;
+   if(path.contains("music.163.com")){response={{"code",503}};failed=true;}
+   else if(path.contains("client_search_cp")){const QJsonObject song{{"songmid","testfallback"},{"songname","TEST fallback"},{"singer",QJsonArray{QJsonObject{{"name","TEST fixture"}}}},{"albumname","TEST"},{"interval",30}};response={{"data",QJsonObject{{"song",QJsonObject{{"list",QJsonArray{song}}}}}}};}
+   else response={{"lyric",QString::fromLatin1(QByteArray("[00:00]TEST FALLBACK FIRST\n[00:05]TEST FALLBACK NEXT").toBase64())}};
+   const auto body=QJsonDocument(response).toJson(QJsonDocument::Compact);socket->write(QByteArray(failed?"HTTP/1.1 503 Service Unavailable\r\n":"HTTP/1.1 200 OK\r\n")+"Content-Type: application/json\r\nContent-Length: "+QByteArray::number(body.size())+"\r\nConnection: close\r\n\r\n"+body);socket->disconnectFromHost();});});
+  LoopbackProviderNetwork providerNetwork;providerNetwork.port=chainServer.serverPort();Bridge fallback;
+  delete fallback.m_lyricProviders;fallback.m_lyricProviders=new LyricProviders(&providerNetwork,&fallback);
+  fallback.m_settings.setValue("preferences/lyrics/online",true);fallback.m_settings.setValue("preferences/lyrics/autoMatch",true);fallback.m_settings.setValue("preferences/lyrics/preferCurrentApp",false);fallback.m_settings.setValue("preferences/lyrics/preferredProvider","auto");fallback.m_settings.setValue("preferences/lyrics/providerPriority","netease,qq,kugou,lrclib");
+  fallback.applyMedia({{"title","TEST fallback"},{"artist","TEST fixture"},{"album","TEST"},{"durationMs",30000}});
+  QEventLoop chainWait;QObject::connect(&fallback,&Bridge::lyricsChanged,&chainWait,[&]{if(!fallback.lyricsLoading()&&!fallback.lyrics().isEmpty())chainWait.quit();});QTimer::singleShot(5000,&chainWait,&QEventLoop::quit);chainWait.exec();
+  if(fallback.lyricProvider()!="qq"||fallback.lyrics().size()!=2||requests.size()!=3||!requests.first().contains("music.163.com"))return 14;
+  fallback.fetchLyrics();if(fallback.lyricSource()!="cache"||fallback.lyricProvider()!="qq"||fallback.lyrics().size()!=2)return 15;
+  qInfo()<<"PASS: actual provider chain survives first-source HTTP failure, selects next trusted source, and replays rich cache";
   if(QCoreApplication::arguments().contains("--live")){
    bridge.m_settings.setValue("preferences/lyrics/online",true);bridge.m_settings.setValue("preferences/lyrics/autoMatch",true);
+   bridge.m_settings.setValue("preferences/lyrics/preferredProvider","lrclib");
    bridge.applyMedia({{"title","The Scientist"},{"artist","Coldplay"},{"album","A Rush of Blood to the Head"},{"durationMs",309000}});
    QEventLoop network;QObject::connect(&bridge,&Bridge::lyricsChanged,&network,[&]{if(!bridge.lyricsLoading())network.quit();});QTimer::singleShot(25000,&network,&QEventLoop::quit);if(bridge.lyrics().isEmpty())network.exec();
    if(bridge.lyrics().isEmpty()||bridge.lyricSource()!="lrclib")return 11;

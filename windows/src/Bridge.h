@@ -12,6 +12,7 @@
 #include <QPointer>
 #include <QSet>
 #include "CoverPalette.h"
+#include "LyricProviders.h"
 class Bridge : public QObject {
  Q_OBJECT
  Q_PROPERTY(QString pairingCode READ pairingCode NOTIFY changed)
@@ -34,6 +35,10 @@ class Bridge : public QObject {
  Q_PROPERTY(qint64 lyricPosition READ lyricPosition NOTIFY lyricProgressChanged)
  Q_PROPERTY(bool lyricsLoading READ lyricsLoading NOTIFY lyricsChanged)
  Q_PROPERTY(QString lyricSource READ lyricSource NOTIFY lyricsChanged)
+ Q_PROPERTY(QString lyricProvider READ lyricProvider NOTIFY lyricsChanged)
+ Q_PROPERTY(double lyricMatchScore READ lyricMatchScore NOTIFY lyricsChanged)
+ Q_PROPERTY(QVariantList lyricProviders READ lyricProviders NOTIFY lyricProvidersChanged)
+ Q_PROPERTY(QVariantList lyricPresets READ lyricPresets NOTIFY settingsChanged)
  Q_PROPERTY(QVariantList devices READ devices NOTIFY changed)
  Q_PROPERTY(QVariantList settingsCatalog READ settingsCatalog CONSTANT)
  Q_PROPERTY(QVariantList appearanceDescriptors READ appearanceDescriptors CONSTANT)
@@ -63,6 +68,15 @@ public:
  qint64 lyricPosition()const{return position()+setting("lyrics/offset",0).toInt();}
  bool lyricsLoading()const{return m_lyricsLoading;}
  QString lyricSource()const{return m_lyricSource;}
+ QString lyricProvider()const{return m_lyricProvider;}
+ double lyricMatchScore()const{return m_lyricMatchScore;}
+ QVariantList lyricProviders()const;
+ QVariantList lyricPresets()const;
+ Q_INVOKABLE void saveLyricPreset(QString name);
+ Q_INVOKABLE void applyLyricPreset(QString name);
+ Q_INVOKABLE void renameLyricPreset(QString oldName,QString newName);
+ Q_INVOKABLE void deleteLyricPreset(QString name);
+ Q_INVOKABLE void resetLyricSettings(QString scope);
  bool volumeKnown()const{return m_media.value("maxVolume").toDouble()>0;}
  double volume()const{const auto maximum=m_media.value("maxVolume").toDouble();return maximum>0?qBound(0.,m_media.value("volume").toDouble()/maximum,1.):0.;}
  QVariantList devices()const{return m_devices;}
@@ -95,6 +109,9 @@ public:
  Q_INVOKABLE void fetchLyrics();
  Q_INVOKABLE void searchLyrics(QString query);
  Q_INVOKABLE void bindLyrics(qint64 id);
+ Q_INVOKABLE void bindLyricCandidate(QString provider,QString sourceId);
+ Q_INVOKABLE void clearLyricBinding();
+ Q_INVOKABLE void testLyricProvider(QString provider);
  Q_INVOKABLE void clearLyricsCache();
  Q_INVOKABLE void forgetDevice(QString url);
  Q_INVOKABLE void checkUpdates();
@@ -102,12 +119,14 @@ public:
  Q_INVOKABLE void setLyricsVisible(QString surface,bool visible);
  bool initializeNative(quintptr hwnd);
  void previewCoverForTest(QString path);
+  void previewMediaForTest(QJsonObject media){applyMedia(media);}
  int nativeStatus() const{return m_nativeStatus;}
  static QVariantList parseLyrics(const QString &text);
 signals:
  void changed();void progressChanged();void lyricsChanged();void settingsChanged();
  void lyricResultsChanged();
  void lyricLineChanged();void lyricProgressChanged();
+ void lyricProvidersChanged();
  void commandFinished(QString requestId,bool success,QString error);
  void notification(QString message); void updateAvailable(QString version,QString url);
 private:
@@ -119,6 +138,7 @@ private:
  QVector<qint64> m_lyricTimes;QString m_lyricSource,m_embeddedLyrics,m_embeddedKey;
  QPointer<QNetworkReply> m_lyricReply,m_lyricSearchReply;
  qint64 m_lyricRetryAfter=0;
+ LyricProviders *m_lyricProviders=nullptr;QString m_lyricProvider;double m_lyricMatchScore=0;
  QJsonObject m_media;QVariantList m_lyrics,m_devices;
  QVariantList m_lyricResults;
  QString m_artworkAccent="#9bc3c6";quint64 m_searchGeneration=0,m_lyricGeneration=0;
@@ -137,6 +157,12 @@ private:
  QString lyricKey() const;void applyTheme();
  QString lyricIdentity() const;void setLyrics(QVariantList rows,QString source);void updateLyricClock();void cancelLyricRequest();
  void requestLyrics(QUrl url,QString key,quint64 generation,bool manual,bool searchFallback=false);
+ LyricTrack lyricTrack()const;QStringList lyricProviderOrder()const;
+ void tryLyricProviders(QStringList providers,int index,QString key,quint64 generation);
+ void tryLyricCandidates(QList<LyricCandidate> candidates,int index,QStringList providers,int nextProvider,QString key,quint64 generation);
+ void acceptLyricDocument(LyricDocument document,bool manual);
+ void searchNextLyricProvider(QString query,QStringList providers,int index,QString key,quint64 generation);
+ void supplementLyricTranslation(QStringList providers,int index,QString key,quint64 generation);
  QByteArray token()const;bool storeToken(QByteArray token);QString cachePath()const;
 };
 

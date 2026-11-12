@@ -26,4 +26,8 @@ int main(int argc,char **argv){QCoreApplication app(argc,argv);QTemporaryDir dir
  const auto settingsFile=QUrl::fromLocalFile(dir.filePath("settings.json"));bridge.exportSettings(settingsFile);
  bridge.resetAppearance("dock");bridge.resetAppearance("global");bridge.importSettings(settingsFile);
  if(bridge.appearanceInherited("dock")||bridge.appearanceConfig("dock")["glassBlur"].toDouble()!=7.2||bridge.appearanceConfig("global")["glassBlur"].toDouble()!=3.6)return 21;
+ bridge.setSetting("lyrics/activeScale",1.18);bridge.setSetting("desktopLyrics/activeScale",1.02);bridge.saveLyricPreset("TEST style");
+ bridge.setSetting("lyrics/activeScale",1.);bridge.applyLyricPreset("TEST style");if(qAbs(bridge.setting("lyrics/activeScale").toDouble()-1.18)>.001||qAbs(bridge.setting("desktopLyrics/activeScale").toDouble()-1.02)>.001)return 22;
+ bridge.renameLyricPreset("TEST style","TEST renamed");bridge.exportSettings(settingsFile);bridge.deleteLyricPreset("TEST renamed");bridge.importSettings(settingsFile);bridge.setSetting("lyrics/activeScale",1.);bridge.applyLyricPreset("TEST renamed");if(qAbs(bridge.setting("lyrics/activeScale").toDouble()-1.18)>.001)return 23;
+ bridge.resetLyricSettings("main");if(bridge.setting("lyrics/activeScale").isValid()||qAbs(bridge.setting("desktopLyrics/activeScale").toDouble()-1.02)>.001)return 24;
  qInfo()<<"LRC, word timings, TTML, settings, WSS and warm/cool/complementary/monochrome/pale cover palette checks passed";return 0;}

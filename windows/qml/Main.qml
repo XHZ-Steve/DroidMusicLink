@@ -60,7 +60,7 @@ ApplicationWindow {
     SystemPalette{id:nativePalette;colorGroup:SystemPalette.Active}
     DesignTokens {id:design;light:root.light;motion:root.motion;accent:root.accent}
     property bool wide: width>=940 && width/height>1.2
-    property int canvasMargin: width<720?20:32
+    property int canvasMargin: Math.round(Math.max(28,Math.min(64,width*.055)))
     component Action: Button {
         id:a
         property string iconName:""
@@ -152,57 +152,19 @@ ApplicationWindow {
     AmbientScene {id:ambient;anchors.fill:parent;visible:!root.highContrast}
     ColumnLayout {
         id:canvasLayout
-        anchors.fill:parent;anchors.margins:root.canvasMargin;spacing:20
+        anchors.fill:parent;anchors.leftMargin:root.canvasMargin;anchors.rightMargin:root.canvasMargin;anchors.topMargin:root.page===0?Math.max(40,root.canvasMargin):48;anchors.bottomMargin:root.page===0?Math.max(28,root.canvasMargin*.65):32;spacing:28
         StackLayout {
             currentIndex:root.page===0?0:1;Layout.fillWidth:true;Layout.fillHeight:true
-            Item {
-                id:homePage
-                GridLayout {
-                    anchors.fill:parent;anchors.leftMargin:root.wide?16:0;anchors.rightMargin:anchors.leftMargin
-                    columns:root.wide?2:1;rowSpacing:root.wide?0:16;columnSpacing:Math.max(32,root.width*.055)
-                    Item {
-                        id:artStage
-                        Layout.fillWidth:true;Layout.fillHeight:true
-                        Layout.preferredWidth:root.wide?homePage.width*.48:homePage.width
-                        Layout.minimumHeight:root.wide?120:Math.max(100,homePage.height*.44)
-                        CoverArtwork {
-                            id:heroCover
-                            objectName:"heroArtwork"
-                            anchors.centerIn:parent
-                            width:Math.max(100,Math.min(artStage.width,artStage.height,root.wide?460:370));height:width
-                            source:backend.artwork;motion:root.motion&&root.visible;transitionDuration:design.change
-                        }
-                        Text{anchors.centerIn:heroCover;visible:!heroCover.ready;text:Icons.glyph("music-2");font.family:lucide.name;font.pixelSize:72;color:root.accent;opacity:.5}
-                    }
-                    ColumnLayout {
-                        Layout.fillWidth:true;Layout.fillHeight:root.wide
-                        Layout.preferredWidth:root.wide?homePage.width*.43:homePage.width
-                        Layout.alignment:root.wide?Qt.AlignVCenter:Qt.AlignTop
-                        spacing:root.wide?12:6
-                        Item{visible:root.wide;Layout.fillHeight:true}
-                        Label{textFormat:Text.PlainText;text:backend.title||qsTr("No media");color:root.fg;font.pixelSize:root.wide?Math.min(design.display,root.width*.033,homePage.height*.12):26;font.weight:Font.DemiBold;wrapMode:Text.Wrap;maximumLineCount:2;elide:Text.ElideRight;Layout.fillWidth:true;horizontalAlignment:root.wide?Text.AlignLeft:Text.AlignHCenter}
-                        Label{textFormat:Text.PlainText;text:backend.artist;color:root.muted;font.pixelSize:root.wide?18:16;elide:Text.ElideRight;Layout.fillWidth:true;horizontalAlignment:root.wide?Text.AlignLeft:Text.AlignHCenter;visible:text.length>0}
-                        Caption{text:backend.appName;visible:text.length>0;Layout.fillWidth:true;horizontalAlignment:root.wide?Text.AlignLeft:Text.AlignHCenter}
-                        LyricView {
-                            id:homeLyrics;controller:backend
-                            visible:root.showLyrics&&backend.lyrics.length>0&&(root.wide||homePage.height>380)
-                            Layout.fillWidth:true;Layout.fillHeight:true;Layout.minimumHeight:visible?80:0;Layout.preferredHeight:root.wide?Math.max(100,homePage.height*.5):100
-                            fontFamily:root.pref("lyrics/fontFamily",root.font.family);fontSize:root.pref("lyrics/fontSize",28)
-                            textColor:root.fg;inactiveColor:root.muted;motion:root.motion
-                            scrollDuration:root.pref("lyrics/scrollDuration",420);easingCurve:root.pref("lyrics/easing","outCubic");focusPosition:root.pref("lyrics/focus",.45);lineSpacing:root.pref("lyrics/lineSpacing",.8);activeScale:root.pref("lyrics/activeScale",1.04);inactiveOpacity:root.pref("lyrics/inactiveOpacity",.58);highlightMode:root.pref("lyrics/highlight","word")
-                            showTranslation:root.pref("lyrics/translation",true);showRomanization:root.pref("lyrics/romanization",false)
-                        }
-                        RowLayout{visible:root.showLyrics&&!backend.lyrics.length;Layout.fillWidth:true
-                            Caption{text:backend.lyricsLoading?qsTr("Matching lyrics…"):qsTr("No lyrics")}
-                            Action{text:qsTr("Match lyrics");iconName:"search";enabled:!backend.lyricsLoading;onClicked:{query.text=backend.title+" "+backend.artist;matchDialog.open()}}
-                        }
-                        Action{text:qsTr("Connect device");primary:true;visible:!backend.online;Layout.topMargin:12;Layout.alignment:root.wide?Qt.AlignLeft:Qt.AlignHCenter;onClicked:root.openSettings(1,0)}
-                        Item{visible:root.wide;Layout.fillHeight:true}
-                    }
-                }
+            NowPlayingCanvas {
+                id:homePage;controller:backend;settingsRevision:root.settingsRevision
+                light:root.light;motion:root.motion;lyricsEnabled:root.showLyrics
+                textColor:root.fg;secondaryColor:root.muted;accent:root.accent
+                onConnectRequested:root.openSettings(1,0)
+                onMatchRequested:{query.text=backend.title+" "+backend.artist;matchDialog.open()}
+                onSeekRequested:function(position){backend.command("seek",position)}
             }
             SettingsPage {
-                id:settingsPage;objectName:"settingsPage";controller:backend;settingsRevision:root.settingsRevision;light:root.light;motion:root.motion;accent:root.accent;textColor:root.fg
+                id:settingsPage;objectName:"settingsPage";materialSource:ambient;controller:backend;settingsRevision:root.settingsRevision;light:root.light;motion:root.motion;accent:root.accent;textColor:root.fg
                 onCloseRequested:root.page=0
                 onDesktopLyricsRequested:desktop.toggleRequested()
                 onFloatingRequested:floating.visible=!floating.visible
@@ -210,7 +172,7 @@ ApplicationWindow {
                 onMatchLyricsRequested:{query.text=backend.title+" "+backend.artist;matchDialog.open()}
                 onSearchDevicesRequested:{discovery.open();backend.discover()}
                 onForgetDeviceRequested:function(url){root.selectedDeviceUrl=url;revoke.open()}
-                onActionRequested:function(key){if(key==="editDesktopLyrics"){desktop.editMode=true;desktop.showRequested()}}
+                onActionRequested:function(key){if(key==="editDesktopLyrics"){desktop.editRequested()}}
             }
         }
         GlassMaterial {
@@ -226,11 +188,13 @@ ApplicationWindow {
                 }
                 RowLayout {Layout.fillWidth:true;spacing:0
                     Item{Layout.fillWidth:true;Layout.preferredWidth:1;implicitHeight:48
-                        Action{anchors.left:parent.left;anchors.verticalCenter:parent.verticalCenter;text:qsTr("Lyrics");iconName:"captions";checked:root.showLyrics;onClicked:root.save("showLyrics",!root.showLyrics)}
+                        Action{anchors.left:parent.left;anchors.verticalCenter:parent.verticalCenter;text:qsTr("Desktop lyrics");iconName:"captions";checked:desktop.requestedVisible;onClicked:desktop.toggleRequested()}
                     }
                     Transport{}
                     Item{Layout.fillWidth:true;Layout.preferredWidth:1;implicitHeight:48
-                        Action{id:volumeButton;objectName:"volumeButton";anchors.right:parent.right;anchors.verticalCenter:parent.verticalCenter;text:qsTr("Phone volume");iconName:backend.volumeKnown&&backend.volume<=0?"volume-x":"volume-2";enabled:root.supports("volume")&&backend.volumeKnown;onClicked:volumePopup.open()}
+                        Action{id:volumeButton;objectName:"volumeButton";anchors.right:parent.right;anchors.verticalCenter:parent.verticalCenter;text:qsTr("Phone volume");iconName:backend.volumeKnown&&backend.volume<=0?"volume-x":"volume-2";enabled:root.supports("volume")&&backend.volumeKnown
+                            onHoveredChanged:if(hovered){volumeDismiss.stop();if(!volumePopup.visible)volumePopup.open()}else volumeDismiss.restart()
+                            onClicked:{volumePopup.pinned=!volumePopup.pinned;if(volumePopup.pinned)volumePopup.open();else volumePopup.close()}}
                     }
                 }
             }
@@ -259,11 +223,11 @@ ApplicationWindow {
         ColumnLayout { anchors.fill:parent
             RowLayout { Field { id:query;Layout.fillWidth:true;placeholderText:qsTr("Title and artist");Accessible.name:qsTr("Title and artist");onAccepted:backend.searchLyrics(text) } Action { text:qsTr("Search");onClicked:backend.searchLyrics(query.text) } }
             ListView { Layout.fillWidth:true;Layout.fillHeight:true;clip:true;model:backend.lyricResults
-                delegate:ItemDelegate { required property var modelData; width:ListView.view.width;text:modelData.title+" — "+modelData.artist;onClicked:{backend.bindLyrics(modelData.id);matchDialog.close()} }
+                delegate:ItemDelegate { required property var modelData; width:ListView.view.width;text:modelData.title+" — "+modelData.artist+"  ·  "+modelData.provider;onClicked:{backend.bindLyricCandidate(modelData.provider,modelData.sourceId);matchDialog.close()} }
             }
         }
     }
-    FileDialog { id: lyricFile; nameFilters:[qsTr("Lyrics")+" (*.lrc *.ttml *.txt)"]; onAccepted: backend.importLyrics(selectedFile) }
+    FileDialog { id: lyricFile; nameFilters:[qsTr("Lyrics")+" (*.lrc *.yrc *.qrc *.krc *.ttml *.txt)"]; onAccepted: backend.importLyrics(selectedFile) }
     FileDialog { id: exportFile; fileMode:FileDialog.SaveFile; defaultSuffix:"json"; onAccepted:backend.exportSettings(selectedFile) }
     FileDialog { id: importFile; nameFilters:["JSON (*.json)"]; onAccepted:backend.importSettings(selectedFile) }
     AppDialog { id: reset; title:qsTr("Restore defaults?"); anchors.centerIn:parent;modal:true;standardButtons:Dialog.Ok|Dialog.Cancel;onAccepted:backend.resetSettings() }
@@ -308,7 +272,7 @@ ApplicationWindow {
                     Action{text:qsTr("Floating player");implicitHeight:34;checked:floating.visible;onClicked:floating.visible=!floating.visible}
                 }
                 RowLayout{Layout.fillWidth:true
-                    Action{text:root.desktopClickThrough?qsTr("Unlock lyrics"):qsTr("Lock lyrics");visible:desktop.visible;implicitHeight:32;onClicked:root.save("desktopClickThrough",!root.desktopClickThrough)}
+                    Action{text:root.desktopClickThrough?qsTr("Unlock lyrics"):qsTr("Lock lyrics");visible:desktop.requestedVisible;implicitHeight:32;onClicked:{root.save("desktopClickThrough",false);desktop.editRequested()}}
                     Item{Layout.fillWidth:true}
                     Action{text:qsTr("Quit");implicitHeight:32;onClicked:Qt.quit()}
                 }
@@ -336,18 +300,37 @@ ApplicationWindow {
     Shortcut{sequence:root.pref("shortcut/floating","Ctrl+Shift+P");onActivated:floating.visible=!floating.visible}
     Shortcut{sequence:"Escape";enabled:root.page!==0;onActivated:root.page=0}
     Popup{
-        id:volumePopup;parent:volumeButton;x:parent.width-width;y:-height-10;width:210;height:130;padding:16;modal:false;closePolicy:Popup.CloseOnEscape|Popup.CloseOnPressOutside
+        id:volumePopup;parent:volumeButton;x:(parent.width-width)/2;y:-height-6;width:76;height:250;padding:12
+        modal:false;focus:false;closePolicy:Popup.CloseOnEscape|Popup.CloseOnPressOutsideParent
+        property bool pinned:false
+        property real previousVolume:0
+        property real requestedVolume:0
+        onClosed:{pinned=false;volumeDismiss.stop()}
+        enter:Transition{NumberAnimation{property:"opacity";from:0;to:1;duration:root.motion?140:0}}
+        exit:Transition{NumberAnimation{property:"opacity";from:1;to:0;duration:root.motion?140:0}}
         background:GlassMaterial{sourceItem:ambient;configuration:root.material("popup");glassEnabled:root.liquidStyle;active:volumePopup.visible;dark:!root.light;backdropColor:root.bg;fallbackColor:design.elevated;motion:root.motion}
         contentItem:ColumnLayout{spacing:8
-            RowLayout{Layout.fillWidth:true
-                Action{text:backend.volume>0?qsTr("Mute"):qsTr("Unmute");iconName:backend.volume>0?"volume-x":"volume-2";onClicked:{if(backend.volume>0){volumePopup.previousVolume=backend.volume;backend.command("volume",0)}else backend.command("volume",volumePopup.previousVolume>0?volumePopup.previousVolume:root.pref("media/unmuteVolume",.25))}}
-                Item{Layout.fillWidth:true} Caption{text:backend.volumeKnown?Math.round(backend.volume*100)+"%":"—"}
+            Caption{Layout.alignment:Qt.AlignHCenter;text:backend.volumeKnown?Math.round(backend.volume*100)+"%":"—"}
+            Slider{
+                id:volumeSlider;Layout.fillHeight:true;Layout.alignment:Qt.AlignHCenter;implicitWidth:36;orientation:Qt.Vertical
+                from:0;to:1;value:backend.volume;enabled:root.supports("volume")&&backend.volumeKnown;wheelEnabled:true;Accessible.name:qsTr("Phone volume")
+                onMoved:{volumePopup.requestedVolume=value;if(!volumeSend.running)volumeSend.start()}
+                onPressedChanged:if(pressed)volumePopup.requestedVolume=value;else{volumeSend.restart();value=Qt.binding(function(){return backend.volume});volumeDismiss.restart()}
+                background:Rectangle{x:volumeSlider.leftPadding+(volumeSlider.availableWidth-width)/2;y:volumeSlider.topPadding;width:4;implicitHeight:148;height:volumeSlider.availableHeight;radius:2;color:root.light?"#24303b60":"#30e0e5ff"
+                    Rectangle{x:0;y:volumeSlider.visualPosition*parent.height;width:4;height:Math.max(0,parent.height-y);radius:2;color:root.accent}
+                }
+                handle:Rectangle{x:volumeSlider.leftPadding+(volumeSlider.availableWidth-width)/2;y:volumeSlider.topPadding+volumeSlider.visualPosition*(volumeSlider.availableHeight-height);implicitWidth:volumeSlider.pressed?16:12;implicitHeight:width;radius:width/2;color:root.accent;border.width:volumeSlider.visualFocus?2:0;border.color:root.fg}
             }
-            TrackSlider{id:volumeSlider;Layout.fillWidth:true;from:0;to:1;value:backend.volume;enabled:root.supports("volume")&&backend.volumeKnown;Accessible.name:qsTr("Phone volume");onMoved:backend.command("volume",value);onPressedChanged:if(!pressed)value=Qt.binding(function(){return backend.volume})}
+            Action{Layout.alignment:Qt.AlignHCenter;text:backend.volume>0?qsTr("Mute"):qsTr("Unmute");iconName:backend.volume>0?"volume-x":"volume-2";implicitHeight:34;implicitWidth:34
+                onClicked:{volumeSend.stop();if(backend.volume>0){volumePopup.previousVolume=backend.volume;backend.command("volume",0)}else backend.command("volume",volumePopup.previousVolume>0?volumePopup.previousVolume:root.pref("media/unmuteVolume",.25))}
+            }
         }
-        property real previousVolume:0
+        Timer{id:volumeSend;interval:80;onTriggered:if(backend.volumeKnown)backend.command("volume",volumePopup.requestedVolume)}
+        HoverHandler{id:volumeHover;onHoveredChanged:if(hovered)volumeDismiss.stop();else volumeDismiss.restart()}
         Connections{target:backend;function onCommandFinished(requestId,success,error){if(!volumeSlider.pressed)volumeSlider.value=Qt.binding(function(){return backend.volume})}}
+        Shortcut{sequence:"Escape";enabled:volumePopup.visible;onActivated:volumePopup.close()}
     }
+    Timer{id:volumeDismiss;interval:350;onTriggered:if(!volumePopup.pinned&&!volumeButton.hovered&&!volumeHover.hovered&&!volumeSlider.pressed)volumePopup.close()}
 
     Timer{id:trayFocusGuard;interval:180;onTriggered:if(trayWindow.visible&&!trayWindow.active)trayWindow.hide()}
     Popup { id: feedback; background:Rectangle{radius:14;color:design.elevated;border.color:design.border;border.width:1} padding:18; anchors.centerIn: parent; width:Math.min(500,root.width-60); modal:false; closePolicy:Popup.CloseOnEscape|Popup.CloseOnPressOutside

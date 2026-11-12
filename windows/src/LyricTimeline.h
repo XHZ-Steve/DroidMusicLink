@@ -2,6 +2,9 @@
 #include <QVariant>
 #include <QRegularExpression>
 #include <QXmlStreamReader>
+#include <QJsonDocument>
+#include <QJsonArray>
+#include <QJsonObject>
 #include <algorithm>
 #include <cmath>
 #include <functional>
@@ -18,8 +21,19 @@ inline qint64 time(QString value) {
 inline QVariantList parse(const QString &input) {
  if(input.size()>2*1024*1024)return {};
  QString source=input;source.replace("\r\n","\n");source.replace('\r','\n');
+ if(source.trimmed().startsWith('<')&&source.contains("LyricContent=")){
+  QXmlStreamReader envelope(source);QString content;while(!envelope.atEnd()){envelope.readNext();if(envelope.isStartElement()&&envelope.attributes().hasAttribute("LyricContent")){content=envelope.attributes().value("LyricContent").toString();break;}}if(content.isEmpty())return {};source=content;
+ }
  QVariantList rows;int wordCount=0;
- if(source.trimmed().startsWith('<')){
+ const QRegularExpression numericLine("^\\[(\\d+),(\\d+)\\](.*)$",QRegularExpression::MultilineOption);
+ if(source.contains(numericLine)){
+  const QRegularExpression yrcWord("\\((\\d+),(\\d+),\\d+\\)"),krcWord("<(\\d+),(\\d+),\\d+>"),qrcWord("\\((\\d+),(\\d+)\\)");
+  for(const auto &line:source.split('\n')){const auto match=numericLine.match(line);if(!match.hasMatch())continue;const auto start=qBound(qint64(0),match.captured(1).toLongLong(),qint64(9000000000000LL));const auto duration=qBound(qint64(0),match.captured(2).toLongLong(),qint64(9000000000000LL));const auto body=match.captured(3);const bool isKrc=body.contains(krcWord),isYrc=body.contains(yrcWord);const auto expression=isKrc?krcWord:isYrc?yrcWord:qrcWord;auto matches=expression.globalMatch(body);QList<QRegularExpressionMatch> markers;while(matches.hasNext())markers<<matches.next();QVariantList words;QString text;
+   for(int i=0;i<markers.size();++i){const auto &marker=markers[i];QString part;if(isKrc||isYrc){const auto from=marker.capturedEnd(),until=i+1<markers.size()?markers[i+1].capturedStart():body.size();part=body.mid(from,until-from);}else {const auto from=i>0?markers[i-1].capturedEnd():0;part=body.mid(from,marker.capturedStart()-from);}if(part.isEmpty())continue;const auto at=qBound(qint64(0),marker.captured(1).toLongLong(),qint64(9000000000000LL))+(isKrc?start:0);const auto length=qBound(qint64(0),marker.captured(2).toLongLong(),qint64(9000000000000LL));words<<QVariantMap{{"time",at},{"end",at+qMax(qint64(1),length)},{"text",part}};text+=part;if(++wordCount>40000)return {};}
+   if(markers.isEmpty())text=body;rows<<QVariantMap{{"time",start},{"end",start+qMax(qint64(1),duration)},{"text",text.trimmed()},{"words",words},{"background",false}};if(rows.size()>10000)return {};
+  }
+  const auto language=QRegularExpression("\\[language:([^\\]]+)\\]").match(source);if(language.hasMatch()){const auto payload=QJsonDocument::fromJson(QByteArray::fromBase64(language.captured(1).toUtf8())).object().value("content").toArray();for(const auto &item:payload){const auto object=item.toObject();const auto lines=object.value("lyricContent").toArray();const auto field=object.value("type").toInt()==0?QString("romanization"):QString("translation");for(int i=0;i<qMin(rows.size(),lines.size());++i){QStringList parts;for(const auto &part:lines[i].toArray())parts<<part.toString();const auto value=parts.join(field=="romanization"?" ":"");if(!value.isEmpty()){auto row=rows[i].toMap();row[field]=value;rows[i]=row;}}}}
+ }else if(source.trimmed().startsWith('<')){
   QXmlStreamReader xml(source);
   while(!xml.atEnd()){
    xml.readNext();if(!xml.isStartElement()||xml.name()!=QStringLiteral("p"))continue;
@@ -46,7 +60,7 @@ inline QVariantList parse(const QString &input) {
     --depth;
    };
    read("",paragraphRole,start,end);
-   if(start>=0){rows<<QVariantMap{{"time",start},{"end",end},{"text",text.trimmed()},{"translation",translation.trimmed()},{"romanization",romanization.trimmed()},{"words",words}};if(rows.size()>10000||wordCount>40000)return {};}
+   if(start>=0){rows<<QVariantMap{{"time",start},{"end",end},{"text",text.trimmed()},{"translation",translation.trimmed()},{"romanization",romanization.trimmed()},{"words",words},{"background",paragraphRole.contains("x-bg")}};if(rows.size()>10000||wordCount>40000)return {};}
   }
   if(xml.hasError())return {};
  } else {
@@ -69,4 +83,24 @@ inline QVariantList parse(const QString &input) {
  return result;
 }
 inline int lineAt(const QVector<qint64> &times,qint64 position){return int(std::upper_bound(times.cbegin(),times.cend(),position)-times.cbegin())-1;}
+inline QVariantList validated(const QVariantList &rows){
+ if(rows.size()>10000)return {};qint64 previous=-1;qsizetype characters=0,words=0;QVariantList result;
+ for(const auto &value:rows){auto row=value.toMap();if(!row.contains("time")||!row.contains("text"))return {};bool ok=false;const auto at=row.value("time").toLongLong(&ok);if(!ok||at<previous||at<0||at>18000000000000LL)return {};previous=at;characters+=row.value("text").toString().size()+row.value("translation").toString().size()+row.value("romanization").toString().size();auto syllables=row.value("words").toList();if(syllables.size()>1024||row.value("text").toString().size()>8192||row.value("translation").toString().size()>8192||row.value("romanization").toString().size()>8192)return {};words+=syllables.size();if(words>40000||characters>2*1024*1024)return {};for(const auto &syllable:syllables){const auto word=syllable.toMap();const auto start=word.value("time").toLongLong(&ok);if(!ok||start<0||start>18000000000000LL||!word.contains("text"))return {};if(word.contains("end")){const auto until=word.value("end").toLongLong(&ok);if(!ok||until<=start||until>18000000000000LL)return {};}characters+=word.value("text").toString().size();if(characters>4*1024*1024)return {};}result<<row;}
+ return result;
+}
+inline QVariantList mergeAuxiliary(QVariantList rows,const QString &text,QString field,qint64 tolerance=150){
+ if(text.trimmed().isEmpty())return rows;const auto auxiliary=parse(text);if(auxiliary.isEmpty()||auxiliary.first().toMap().value("untimed").toBool())return rows;
+ QVector<qint64> times;for(const auto &value:auxiliary)times<<value.toMap().value("time").toLongLong();
+ for(auto &value:rows){auto row=value.toMap();const auto at=row.value("time").toLongLong();const auto next=std::lower_bound(times.cbegin(),times.cend(),at);int best=-1;qint64 difference=tolerance+1;for(int index:QList<int>{int(next-times.cbegin())-1,int(next-times.cbegin())}){if(index>=0&&index<times.size()&&qAbs(times[index]-at)<difference){best=index;difference=qAbs(times[index]-at);}}if(best>=0){const auto extra=auxiliary[best].toMap().value("text").toString();if(!extra.isEmpty())row[field]=extra;}value=row;}return rows;
+}
+inline QVariantList mergeDocumentAuxiliary(const QVariantList &original,const QVariantList &extra,qint64 tolerance=250,bool verifyText=true){
+ auto normalized=[](QString value){value=value.normalized(QString::NormalizationForm_KC).toCaseFolded();value.remove(QRegularExpression("[^\\p{L}\\p{N}]+"));return value;};
+  struct AuxiliaryRow {qint64 time;QString text;QVariantMap row;};
+  QVector<AuxiliaryRow> indexed;indexed.reserve(extra.size());
+  for(const auto &value:extra){const auto row=value.toMap();indexed.push_back({row.value("time").toLongLong(),normalized(row.value("text").toString()),row});}
+  std::stable_sort(indexed.begin(),indexed.end(),[](const auto &a,const auto &b){return a.time<b.time;});
+  QVariantList result=original;int eligible=0,matched=0;
+  for(int i=0;i<original.size();++i){auto row=original[i].toMap();const auto text=normalized(row.value("text").toString());if(text.isEmpty())continue;++eligible;const auto at=row.value("time").toLongLong();auto candidate=std::lower_bound(indexed.begin(),indexed.end(),at-tolerance,[](const auto &entry,qint64 time){return entry.time<time;});for(;candidate!=indexed.end()&&candidate->time<=at+tolerance;++candidate){if(verifyText&&candidate->text!=text)continue;const auto &other=candidate->row;bool added=false;for(const auto &field:QStringList{"translation","romanization"})if(row.value(field).toString().isEmpty()&&!other.value(field).toString().isEmpty()){row[field]=other.value(field);added=true;}if(added){++matched;result[i]=row;}break;}}
+ return eligible>0&&matched>=qMin(3,eligible)&&matched>=eligible*.65?result:original;
+}
 }

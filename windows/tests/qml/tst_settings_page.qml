@@ -7,6 +7,12 @@ Item {
     Rectangle { anchors.fill: parent; color: "#10121b" }
     QtObject {
         id: controller
+        property var lyricPresets:[{name:"soft",label:"Soft",builtIn:true}]
+        property string lastAppliedPreset:""
+        function saveLyricPreset(name){lyricPresets=lyricPresets.concat([{name:name,builtIn:false}]);revision++}
+        function applyLyricPreset(name){lastAppliedPreset=name}
+        function renameLyricPreset(oldName,newName){lyricPresets=lyricPresets.map(function(row){return row.name===oldName?{name:newName,builtIn:false}:row});revision++}
+        function deleteLyricPreset(name){lyricPresets=lyricPresets.filter(function(row){return row.name!==name});revision++}
         property int revision: 0
         property var values: ({motion:true})
         property var appearance: ({glassMotion:true,glassBlur:2.4,glassDispersion:.07})
@@ -25,12 +31,19 @@ Item {
         property var devices: []
         property string status: "Disconnected"
         property bool online: false
+        property string lyricProvider: "lrclib"
+        property string lastProviderTest: ""
+        property var lyricProviders: [
+            {id:"lrclib",name:"LRCLIB TEST",capabilities:["search","line"],status:"unknown",enabled:true,enabledKey:"lyrics/providers/lrclib/enabled"},
+            {id:"netease",name:"NetEase TEST",capabilities:["line","word","translation"],status:"available",enabled:true,enabledKey:"lyrics/providers/netease/enabled"}
+        ]
         function setting(key,fallback){return values[key]===undefined?fallback:values[key]}
         function setSetting(key,value){const next=Object.assign({},values);next[key]=value;values=next;revision++}
         function appearanceConfig(scope){return appearance}
         function appearanceInherited(scope){return inherit}
         function setAppearance(scope,key,value){const next=Object.assign({},appearance);next[key]=value;appearance=next;revision++}
         function setAppearanceInherited(scope,value){inherit=value;revision++}
+        function testLyricProvider(id){lastProviderTest=id}
     }
     SettingsPage {
         id: page
@@ -44,6 +57,18 @@ Item {
         name:"SettingsPage"
         when:windowShown
         function init(){page.navigate(0,0);controller.values={motion:true};controller.appearance={glassMotion:true,glassBlur:2.4,glassDispersion:.07};controller.inherit=true;controller.revision++;searchSpy.clear();waitForRendering(page)}
+        function test_preset_dialogs_persist_rename_and_delete(){
+            page.navigate(3,6);waitForRendering(page)
+            page.editPresetName("save");wait(30)
+            const field=findChild(page,"presetNameField");verify(field);field.text="TEST custom"
+            const save=findChild(page,"presetNameSave");verify(save.enabled);mouseClick(save,save.width/2,save.height/2);wait(30)
+            verify(controller.lyricPresets.some(function(row){return row.name==="TEST custom"}));compare(page.selectedPresetName,"TEST custom")
+            page.editPresetName("rename");wait(30);field.text="TEST renamed";mouseClick(save,save.width/2,save.height/2);wait(30)
+            verify(controller.lyricPresets.some(function(row){return row.name==="TEST renamed"}))
+            const dialog=findChild(page,"presetDeleteDialog");dialog.open();wait(30)
+            const confirm=findChild(page,"presetDeleteConfirm");mouseClick(confirm,confirm.width/2,confirm.height/2);wait(30)
+            verify(!controller.lyricPresets.some(function(row){return row.name==="TEST renamed"}))
+        }
         function test_switch_commits_actual_boolean(){
             const toggle=findChild(page,"editor-motion")
             verify(toggle);verify(toggle.checked)
@@ -53,6 +78,7 @@ Item {
             compare(toggle.checked,false)
         }
         function test_search_navigates_and_reveals_advanced_row(){
+            page.setSectionExpanded(3,4,false)
             const field=findChild(page,"settingsSearch")
             field.text="TEST sync offset"
             compare(page.searchResults.length,1)
@@ -62,6 +88,7 @@ Item {
             mouseClick(hit,hit.width/2,hit.height/2)
             compare(page.activeGroup,3);compare(page.activeSection,4)
             verify(page.advancedExpanded)
+            compare(page.isCollapsed(3,4),false)
             tryVerify(function(){return !!findChild(page,"setting-lyrics/offset")})
             compare(page.highlightedKey,"lyrics/offset")
             compare(field.text,"")
@@ -100,6 +127,49 @@ Item {
             const field=findChild(page,"shortcut-shortcut")
             verify(field);field.forceActiveFocus();keyClick(Qt.Key_L,Qt.ControlModifier|Qt.AltModifier)
             compare(controller.values.shortcut,"Ctrl+Alt+L")
+        }
+        function test_sections_share_one_page_and_collapse(){
+            const section=findChild(page,"section-0/0")
+            const heading=findChild(page,"section-heading-0/0")
+            verify(section);verify(heading)
+            const height=section.height
+            mouseClick(heading,heading.width/2,heading.height/2)
+            compare(page.isCollapsed(0,0),true)
+            tryVerify(function(){return section.height<height})
+            mouseClick(heading,heading.width/2,heading.height/2)
+            compare(page.isCollapsed(0,0),false)
+        }
+        function test_category_and_hidden_indexes_are_searchable(){
+            const field=findChild(page,"settingsSearch")
+            field.text="tongyong"
+            verify(page.searchResults.length>0)
+            verify(page.searchResults.some(function(row){return row.group===0}))
+            field.text="歌词"
+            verify(page.searchResults.some(function(row){return row.group===3}))
+            field.text="Automatic matching"
+            verify(page.searchResults.some(function(row){return row.group===3&&row.section===1}))
+        }
+        function test_provider_test_and_enable_are_live(){
+            page.navigate(3,0);waitForRendering(page)
+            const testButton=findChild(page,"provider-test-lrclib")
+            const enabled=findChild(page,"provider-enabled-lrclib")
+            verify(testButton);verify(enabled)
+            mouseClick(testButton,testButton.width/2,testButton.height/2)
+            compare(controller.lastProviderTest,"lrclib")
+            mouseClick(enabled,enabled.width/2,enabled.height/2)
+            compare(controller.values["lyrics/providers/lrclib/enabled"],false)
+        }
+        function test_provider_drag_persists_priority(){
+            page.navigate(3,0);waitForRendering(page)
+            const grip=findChild(page,"provider-drag-lrclib")
+            verify(grip)
+            mousePress(grip,grip.width/2,grip.height/2,Qt.LeftButton)
+            mouseMove(grip,grip.width/2,grip.height/2+20,30)
+            mouseMove(grip,grip.width/2,grip.height/2+94,30)
+            verify(grip.dragActive)
+            mouseRelease(grip,grip.width/2,grip.height/2+94,Qt.LeftButton)
+            compare(controller.values["lyrics/providerPriority"],"netease,lrclib")
+            compare(page.providerRows[0].id,"netease")
         }
     }
 }

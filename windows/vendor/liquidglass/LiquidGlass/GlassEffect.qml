@@ -4,8 +4,8 @@
 import QtQuick
 
 ShaderEffect {
-    vertexShader: "shaders/liquidglass.vert.qsb"
-    fragmentShader: "shaders/liquidglass.frag.qsb"
+    vertexShader: "qrc:/qt/qml/DroidMediaLink/vendor/liquidglass/LiquidGlass/shaders/liquidglass.vert.qsb"
+    fragmentShader: "qrc:/qt/qml/DroidMediaLink/vendor/liquidglass/LiquidGlass/shaders/liquidglass.frag.qsb"
 
     property var source
     property var field

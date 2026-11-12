@@ -1,0 +1,596 @@
+{
+  "prefixes": [
+    "lyrics",
+    "desktopLyrics"
+  ],
+  "desktopOverrides": {
+    "fontSize": 36,
+    "fontWeight": 450,
+    "activeWeight": 500,
+    "alignment": "center",
+    "longLine": "shrink",
+    "activeScale": 1.1,
+    "outlineWidth": 0,
+    "focus": 0.5,
+    "lineSpacing": 0.22,
+    "maxWidth": 1800,
+    "color": "#fff8f5",
+    "pastColor": "#e0e3ed",
+    "futureColor": "#bdc5d5",
+    "pastOpacity": 0.5,
+    "futureOpacity": 0.42
+  },
+  "settings": [
+    {
+      "section": "layout",
+      "key": "fontFamily",
+      "default": "Segoe UI Variable Display",
+      "type": "font"
+    },
+    {
+      "section": "layout",
+      "key": "fontSize",
+      "default": 28,
+      "type": "int",
+      "min": 16,
+      "max": 72
+    },
+    {
+      "section": "layout",
+      "key": "fontWeight",
+      "default": 500,
+      "type": "int",
+      "min": 100,
+      "max": 900
+    },
+    {
+      "section": "layout",
+      "key": "letterSpacing",
+      "default": 0,
+      "type": "real",
+      "min": -2,
+      "max": 8
+    },
+    {
+      "section": "layout",
+      "key": "lineHeight",
+      "default": 1.25,
+      "type": "real",
+      "min": 1,
+      "max": 2
+    },
+    {
+      "section": "layout",
+      "key": "lineSpacing",
+      "default": 0.65,
+      "type": "real",
+      "min": 0,
+      "max": 2
+    },
+    {
+      "section": "layout",
+      "key": "groupSpacing",
+      "default": 10,
+      "type": "real",
+      "min": 0,
+      "max": 60
+    },
+    {
+      "section": "layout",
+      "key": "maxWidth",
+      "default": 1000,
+      "type": "int",
+      "min": 240,
+      "max": 2000
+    },
+    {
+      "section": "layout",
+      "key": "alignment",
+      "default": "left",
+      "type": "enum",
+      "options": [
+        "left",
+        "center",
+        "right"
+      ]
+    },
+    {
+      "section": "layout",
+      "key": "longLine",
+      "default": "wrap",
+      "type": "enum",
+      "options": [
+        "wrap",
+        "shrink",
+        "elide"
+      ]
+    },
+    {
+      "section": "layout",
+      "key": "minimumScale",
+      "default": 0.65,
+      "type": "real",
+      "min": 0.35,
+      "max": 1
+    },
+    {
+      "section": "current",
+      "key": "activeScale",
+      "default": 1.1,
+      "type": "real",
+      "min": 1,
+      "max": 1.35
+    },
+    {
+      "section": "current",
+      "key": "activeOpacity",
+      "default": 1,
+      "type": "real",
+      "min": 0,
+      "max": 1
+    },
+    {
+      "section": "current",
+      "key": "activeWeight",
+      "default": 600,
+      "type": "real",
+      "min": 100,
+      "max": 900
+    },
+    {
+      "section": "current",
+      "key": "scaleDuration",
+      "default": 280,
+      "type": "real",
+      "min": 0,
+      "max": 1200
+    },
+    {
+      "section": "current",
+      "key": "highlightDuration",
+      "default": 180,
+      "type": "real",
+      "min": 0,
+      "max": 1000
+    },
+    {
+      "section": "current",
+      "key": "outlineWidth",
+      "default": 0,
+      "type": "real",
+      "min": 0,
+      "max": 4
+    },
+    {
+      "section": "current",
+      "key": "shadowBlur",
+      "default": 6,
+      "type": "real",
+      "min": 0,
+      "max": 24
+    },
+    {
+      "section": "current",
+      "key": "shadowOffset",
+      "default": 2,
+      "type": "real",
+      "min": -12,
+      "max": 12
+    },
+    {
+      "section": "current",
+      "key": "glowRadius",
+      "default": 8,
+      "type": "real",
+      "min": 0,
+      "max": 24
+    },
+    {
+      "section": "current",
+      "key": "glowOpacity",
+      "default": 0.2,
+      "type": "real",
+      "min": 0,
+      "max": 1
+    },
+    {
+      "section": "current",
+      "key": "scaleAnimation",
+      "default": true,
+      "type": "bool"
+    },
+    {
+      "section": "current",
+      "key": "shadow",
+      "default": false,
+      "type": "bool"
+    },
+    {
+      "section": "current",
+      "key": "glow",
+      "default": false,
+      "type": "bool"
+    },
+    {
+      "section": "current",
+      "key": "color",
+      "default": "auto",
+      "type": "color"
+    },
+    {
+      "section": "current",
+      "key": "outlineColor",
+      "default": "#80000000",
+      "type": "color"
+    },
+    {
+      "section": "current",
+      "key": "shadowColor",
+      "default": "#80000000",
+      "type": "color"
+    },
+    {
+      "section": "current",
+      "key": "glowColor",
+      "default": "#d4e7ff",
+      "type": "color"
+    },
+    {
+      "section": "inactive",
+      "key": "pastColor",
+      "default": "auto",
+      "type": "color"
+    },
+    {
+      "section": "inactive",
+      "key": "futureColor",
+      "default": "auto",
+      "type": "color"
+    },
+    {
+      "section": "inactive",
+      "key": "pastOpacity",
+      "default": 0.58,
+      "type": "real",
+      "min": 0,
+      "max": 1
+    },
+    {
+      "section": "inactive",
+      "key": "futureOpacity",
+      "default": 0.5,
+      "type": "real",
+      "min": 0,
+      "max": 1
+    },
+    {
+      "section": "inactive",
+      "key": "inactiveScale",
+      "default": 1,
+      "type": "real",
+      "min": 0.75,
+      "max": 1.2
+    },
+    {
+      "section": "inactive",
+      "key": "nearbyEmphasis",
+      "default": 0.12,
+      "type": "real",
+      "min": 0,
+      "max": 0.4
+    },
+    {
+      "section": "word",
+      "key": "highlight",
+      "default": "word",
+      "type": "enum",
+      "options": [
+        "word",
+        "line"
+      ]
+    },
+    {
+      "section": "word",
+      "key": "sungColor",
+      "default": "auto",
+      "type": "color"
+    },
+    {
+      "section": "word",
+      "key": "unsungColor",
+      "default": "auto",
+      "type": "color"
+    },
+    {
+      "section": "word",
+      "key": "wordFill",
+      "default": "continuous",
+      "type": "enum",
+      "options": [
+        "continuous",
+        "step"
+      ]
+    },
+    {
+      "section": "word",
+      "key": "wordSoftness",
+      "default": 0.04,
+      "type": "real",
+      "min": 0,
+      "max": 0.3
+    },
+    {
+      "section": "word",
+      "key": "wordDuration",
+      "default": 70,
+      "type": "int",
+      "min": 0,
+      "max": 300
+    },
+    {
+      "section": "word",
+      "key": "wordGlow",
+      "default": false,
+      "type": "bool"
+    },
+    {
+      "section": "scroll",
+      "key": "autoScroll",
+      "default": true,
+      "type": "bool"
+    },
+    {
+      "section": "scroll",
+      "key": "scrollDuration",
+      "default": 420,
+      "type": "real",
+      "min": 0,
+      "max": 1600
+    },
+    {
+      "section": "scroll",
+      "key": "focus",
+      "default": 0.45,
+      "type": "real",
+      "min": 0.15,
+      "max": 0.8
+    },
+    {
+      "section": "scroll",
+      "key": "wheelSensitivity",
+      "default": 1.4,
+      "type": "real",
+      "min": 0.25,
+      "max": 4
+    },
+    {
+      "section": "scroll",
+      "key": "inertia",
+      "default": 2500,
+      "type": "real",
+      "min": 500,
+      "max": 8000
+    },
+    {
+      "section": "scroll",
+      "key": "deceleration",
+      "default": 1800,
+      "type": "real",
+      "min": 200,
+      "max": 6000
+    },
+    {
+      "section": "scroll",
+      "key": "recoveryDelay",
+      "default": 2400,
+      "type": "real",
+      "min": 300,
+      "max": 10000
+    },
+    {
+      "section": "scroll",
+      "key": "bounceDuration",
+      "default": 240,
+      "type": "real",
+      "min": 0,
+      "max": 800
+    },
+    {
+      "section": "scroll",
+      "key": "fadeTop",
+      "default": 70,
+      "type": "real",
+      "min": 0,
+      "max": 200
+    },
+    {
+      "section": "scroll",
+      "key": "fadeBottom",
+      "default": 70,
+      "type": "real",
+      "min": 0,
+      "max": 200
+    },
+    {
+      "section": "scroll",
+      "key": "fadeStrength",
+      "default": 1,
+      "type": "real",
+      "min": 0,
+      "max": 1
+    },
+    {
+      "section": "scroll",
+      "key": "easing",
+      "default": "outCubic",
+      "type": "enum",
+      "options": [
+        "linear",
+        "outCubic",
+        "inOutCubic",
+        "outQuint"
+      ]
+    },
+    {
+      "section": "scroll",
+      "key": "bounds",
+      "default": "bounce",
+      "type": "enum",
+      "options": [
+        "stop",
+        "bounce"
+      ]
+    },
+    {
+      "section": "translation",
+      "key": "translation",
+      "default": true,
+      "type": "bool"
+    },
+    {
+      "section": "translation",
+      "key": "translationFont",
+      "default": "Segoe UI Variable Text",
+      "type": "font"
+    },
+    {
+      "section": "translation",
+      "key": "translationSize",
+      "default": 0.6,
+      "type": "real",
+      "min": 0.3,
+      "max": 1.2
+    },
+    {
+      "section": "translation",
+      "key": "translationWeight",
+      "default": 400,
+      "type": "int",
+      "min": 100,
+      "max": 900
+    },
+    {
+      "section": "translation",
+      "key": "translationColor",
+      "default": "auto",
+      "type": "color"
+    },
+    {
+      "section": "translation",
+      "key": "translationOpacity",
+      "default": 0.78,
+      "type": "real",
+      "min": 0,
+      "max": 1
+    },
+    {
+      "section": "translation",
+      "key": "translationSpacing",
+      "default": 6,
+      "type": "real",
+      "min": 0,
+      "max": 40
+    },
+    {
+      "section": "translation",
+      "key": "translationLineHeight",
+      "default": 1.2,
+      "type": "real",
+      "min": 1,
+      "max": 2
+    },
+    {
+      "section": "translation",
+      "key": "translationAlignment",
+      "default": "inherit",
+      "type": "enum",
+      "options": [
+        "inherit",
+        "left",
+        "center",
+        "right"
+      ]
+    },
+    {
+      "section": "romanization",
+      "key": "romanization",
+      "default": false,
+      "type": "bool"
+    },
+    {
+      "section": "romanization",
+      "key": "romanizationFont",
+      "default": "Segoe UI Variable Text",
+      "type": "font"
+    },
+    {
+      "section": "romanization",
+      "key": "romanizationSize",
+      "default": 0.52,
+      "type": "real",
+      "min": 0.3,
+      "max": 1.2
+    },
+    {
+      "section": "romanization",
+      "key": "romanizationWeight",
+      "default": 400,
+      "type": "int",
+      "min": 100,
+      "max": 900
+    },
+    {
+      "section": "romanization",
+      "key": "romanizationColor",
+      "default": "auto",
+      "type": "color"
+    },
+    {
+      "section": "romanization",
+      "key": "romanizationOpacity",
+      "default": 0.62,
+      "type": "real",
+      "min": 0,
+      "max": 1
+    },
+    {
+      "section": "romanization",
+      "key": "romanizationSpacing",
+      "default": 6,
+      "type": "real",
+      "min": 0,
+      "max": 40
+    },
+    {
+      "section": "romanization",
+      "key": "romanizationLineHeight",
+      "default": 1.2,
+      "type": "real",
+      "min": 1,
+      "max": 2
+    },
+    {
+      "section": "romanization",
+      "key": "romanizationAlignment",
+      "default": "inherit",
+      "type": "enum",
+      "options": [
+        "inherit",
+        "left",
+        "center",
+        "right"
+      ]
+    },
+    {
+      "section": "layout",
+      "key": "rendering",
+      "default": "curve",
+      "type": "enum",
+      "options": [
+        "curve",
+        "qt",
+        "native"
+      ]
+    }
+  ]
+}
