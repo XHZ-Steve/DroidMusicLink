@@ -1,0 +1,5 @@
+Backdrop 1.0.1 — Kyant (Kyant0)
+https://github.com/Kyant0/AndroidLiquidGlass
+https://repo.maven.apache.org/maven2/io/github/kyant0/backdrop/1.0.1/
+Licensed under the Apache License, Version 2.0. See Apache-2.0.txt.
+Unmodified published AAR; used for optical backdrop refraction and blur.

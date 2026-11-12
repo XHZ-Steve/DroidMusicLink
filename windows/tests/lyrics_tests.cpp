@@ -1,0 +1,21 @@
+#include "LyricTimeline.h"
+#include <QCoreApplication>
+#include <QDebug>
+int main(int argc,char **argv){
+ QCoreApplication app(argc,argv);
+ const auto bilingual=LyricTimeline::parse("[00:01.00]<00:01.00>你好 <00:01.50>world\n[00:01.00]Hello world\n[00:03.00]Next");
+ if(bilingual.size()!=2||bilingual[0].toMap().value("translation").toString()!="Hello world")return 1;
+ const auto words=bilingual[0].toMap().value("words").toList();
+ if(words.size()!=2||words[0].toMap().value("end").toLongLong()!=1500||words[1].toMap().value("end").toLongLong()!=3000)return 2;
+ const auto ttml=LyricTimeline::parse("<tt xmlns:ttm=\"http://www.w3.org/ns/ttml#metadata\"><body><p begin=\"1s\" end=\"3s\"><span begin=\"1s\" end=\"2s\">你好</span><span begin=\"2s\" end=\"3s\">世界</span><span ttm:role=\"x-translation\">Hello world</span><span ttm:role=\"x-roman\">ni hao shi jie</span></p></body></tt>");
+ if(ttml.size()!=1||ttml[0].toMap().value("text").toString()!=QString::fromUtf8("你好世界")||ttml[0].toMap().value("translation").toString()!="Hello world"||ttml[0].toMap().value("romanization").toString()!="ni hao shi jie")return 3;
+ const QVector<qint64> times{1000,2000,4000};
+ for(int repeat=0;repeat<10000;++repeat)if(LyricTimeline::lineAt(times,5000)!=2||LyricTimeline::lineAt(times,0)!=-1||LyricTimeline::lineAt(times,2000)!=1||LyricTimeline::lineAt(times,1500)!=0)return 4;
+ QString deep="<tt><p begin=\"1s\">";for(int i=0;i<1000;++i)deep+="<span>";deep+="text";for(int i=0;i<1000;++i)deep+="</span>";deep+="</p></tt>";
+ if(!LyricTimeline::parse(deep).isEmpty()||!LyricTimeline::parse(QString(2*1024*1024+1,'x')).isEmpty())return 5;
+ if(!LyricTimeline::parse("<tt><p begin=\"1s\">broken").isEmpty())return 6;
+ const auto plain=LyricTimeline::parse("Untimed first\nUntimed second");if(plain.size()!=2||!plain.first().toMap().value("untimed").toBool())return 7;
+ const auto terminal=LyricTimeline::parse("[00:01]<00:01>A<00:02>B<00:03>\r\n[00:06]C");const auto lastWord=terminal.first().toMap().value("words").toList().last().toMap();if(lastWord.value("end").toLongLong()!=3000||lastWord.value("text").toString()!="B")return 8;
+ qInfo()<<"PASS: bounded bilingual enhanced-LRC/TTML parsing, seek/backward index, malformed/deep input, untimed fallback";
+ return 0;
+}

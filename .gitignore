@@ -1,0 +1,17 @@
+/artifacts/
+/.tools/
+/build*/
+**/build/
+**/.gradle/
+**/.kotlin/
+**/.cxx/
+**/local.properties
+.idea/
+.vs/
+*.user
+*.jks
+*.keystore
+*.pfx
+*.p12
+__pycache__/
+aqtinstall.log

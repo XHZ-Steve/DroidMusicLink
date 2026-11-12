@@ -1,0 +1,7 @@
+# Windows UI incremental review
+
+Independent read-only visual review: GPT-6 Luna Medium, two rounds plus a settings-end verification. First round identified the nearly uniform warm field and weak composition depth. The field was revised to spatial primary/secondary lighting. Second round found the light settings viewport's partially visible bottom row; a dedicated end-scroll capture proved all final controls reachable, and a persistent scrollbar was added. The reviewer confirmed this concern resolved and found no other high-severity alignment/overflow issue in the reviewed set.
+
+Independent read-only code review: GPT-6 Luna Low. Found the inherited fixed 50% volume display. Fixed with normalized reported volume/maxVolume and unknown-state disabling. Follow-up checked volume protocol compatibility, reactive settings bindings, glass tint persistence and non-vacuous visual-tree/FBO audit sampling; no confirmed remaining regression was reported in that scope.
+
+The main agent additionally found and repaired modal result-height compression, low-height lyric layout pressure, cover alpha darkening during fades, and the pending-connection/DHCP endpoint timing issue. These later changes were rebuilt and runtime checked; they are not misrepresented as additional independent reviews. Native Windows drag/maximize/restore and an actual mouse toggle of the light theme were observed after the computer-use channel recovered.

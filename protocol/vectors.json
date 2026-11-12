@@ -1,0 +1,93 @@
+[
+  {
+    "protocolVersion": 1,
+    "messageId": "fixture-0",
+    "timestamp": 1730000000000,
+    "type": "hello",
+    "payload": {
+      "deviceName": "Android"
+    }
+  },
+  {
+    "protocolVersion": 1,
+    "messageId": "fixture-1",
+    "timestamp": 1730000000000,
+    "type": "pair_begin",
+    "payload": {
+      "clientId": "test-client",
+      "clientName": "Windows test",
+      "clientCommit": "0000000000000000000000000000000000000000000000000000000000000000"
+    }
+  },
+  {
+    "protocolVersion": 1,
+    "messageId": "fixture-2",
+    "timestamp": 1730000000000,
+    "type": "command_request",
+    "payload": {
+      "requestId": "seek-1",
+      "command": "seek",
+      "positionMs": 12000
+    }
+  },
+  {
+    "protocolVersion": 1,
+    "messageId": "fixture-3",
+    "timestamp": 1730000000000,
+    "type": "command_request",
+    "payload": {
+      "requestId": "volume-1",
+      "command": "volume",
+      "volume": 0.5
+    }
+  },
+  {
+    "protocolVersion": 1,
+    "messageId": "fixture-4",
+    "timestamp": 1730000000000,
+    "type": "session_snapshot",
+    "payload": {
+      "title": "测试 🎵",
+      "artist": "Artist",
+      "album": "",
+      "appName": "Player",
+      "packageName": "org.example.player",
+      "sessionId": "test-session",
+      "durationMs": 180000,
+      "positionMs": 12000,
+      "speed": 1.0,
+      "state": "playing",
+      "commands": [
+        "pause",
+        "seek"
+      ]
+    }
+  },
+  {
+    "protocolVersion": 1,
+    "messageId": "fixture-5",
+    "timestamp": 1730000000000,
+    "type": "pair_challenge",
+    "payload": {
+      "serverCommit": "0101010101010101010101010101010101010101010101010101010101010101"
+    }
+  },
+  {
+    "protocolVersion": 1,
+    "messageId": "fixture-6",
+    "timestamp": 1730000000000,
+    "type": "pair_reveal",
+    "payload": {
+      "clientNonce": "0101010101010101010101010101010101010101010101010101010101010101"
+    }
+  },
+  {
+    "protocolVersion": 1,
+    "messageId": "fixture-7",
+    "timestamp": 1730000000000,
+    "type": "pair_compare",
+    "payload": {
+      "serverNonce": "0101010101010101010101010101010101010101010101010101010101010101"
+    }
+  }
+]

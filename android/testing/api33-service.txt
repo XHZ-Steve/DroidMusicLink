@@ -1,0 +1,19 @@
+ACTIVITY MANAGER SERVICES (dumpsys activity services)
+  User 0 active services:
+  * ServiceRecord{794d925 u0 org.droidmedialink.android/.PassiveLinkService}
+    intent={cmp=org.droidmedialink.android/.PassiveLinkService}
+    packageName=org.droidmedialink.android
+    processName=org.droidmedialink.android
+    baseDir=/data/app/~~qSPnvP7mX8M7J9yIPqAcsg==/org.droidmedialink.android-kFWS_blhusA5VaDVbkOX5A==/base.apk
+    dataDir=/data/user/0/org.droidmedialink.android
+    app=ProcessRecord{ffa2de 7196:org.droidmedialink.android/u0a174}
+    allowWhileInUsePermissionInFgs=true
+    recentCallingPackage=org.droidmedialink.android
+    recentCallingUid=10174
+    allowStartForeground=PROC_STATE_TOP
+    startForegroundCount=1
+    infoAllowStartForeground=[callingPackage: org.droidmedialink.android; callingUid: 10174; uidState: TOP ; intent: Intent { cmp=org.droidmedialink.android/.PassiveLinkService }; code:PROC_STATE_TOP; tempAllowListReason:<null>; targetSdkVersion:36; callerTargetSdkVersion:36; startForegroundCount:0; bindFromPackage:null]
+    isForeground=true foregroundId=1 foregroundNoti=Notification(channel=link shortcut=null contentView=null vibrate=null sound=null defaults=0x0 flags=0x40 color=0x00000000 actions=1 vis=PRIVATE)
+    createTime=-41s57ms startingBgTimeout=--
+    lastActivity=-41s56ms restartTime=-41s56ms createdFromFg=true
+    startRequested=true delayedStop=false stopIfKilled=false callStart=true lastStartId=1

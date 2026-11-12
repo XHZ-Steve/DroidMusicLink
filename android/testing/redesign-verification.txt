@@ -1,0 +1,41 @@
+2026-11-11 Android redesign verification
+
+Build: SDK36 / AGP8.13.0 / Gradle8.14.3 / JDK17 / Kotlin2.2.20.
+assembleDebug testDebugUnitTest lintDebug assembleDebugAndroidTest: BUILD SUCCESSFUL.
+Five JVM tests passed; zero failures/errors. lint zero errors,18 warnings
+(available dependency updates, KTX style suggestions, icon/compatibility and one unused legacy Allow string).
+Final log: redesign-final-build.txt. Instrumentation APK compiled; no new instrumentation run is claimed here.
+
+Pairing: real Qt/Android API30 commit-reveal SAS, phone approval, rejection,
+pinned token reconnect and62-second heartbeat PASS. Windows agent's records:
+../../artifacts/sas-integration-2026-11-11.txt. Phone screenshot:
+../screenshots/pair-compare-api30.png. API30 Material fallback screenshot:
+../screenshots/recommended-api30.png. The prior test identities are emulator-only.
+
+API33 true optical runtime verification:
+Official Google APIs33 rev17 x86_64 image (Google archive SHA1
+2b96f5bd5c79bfe1cc645e70b3e630b5755d9711 verified), emulator-5556.
+Fresh install, first recommended-settings dialog, dismiss, Settings navigation,
+Liquid Glass toggle, content scrolling, reinstallation with settings retained,
+notification consent and foreground connection-service startup all exercised.
+Application PID remained alive with Liquid Glass enabled; AndroidRuntime log
+contained no errors. API33 service evidence: api33-service.txt.
+Screenshots personally inspected: recommended-api33.png, glass-settings-api33.png,
+glass-scroll-api33.png, devices-api33.png. Navbar captures actual scrolling page
+content, applies published Backdrop AGSL lens shader and blur; this visibly
+refracts/blurs underlying form content and preserves foreground Material controls.
+Devices XML shows only device heading and PC-selection instruction, no network
+address, SHA fingerprint, pairing code or search field.
+
+Pinned Backdrop1.0.1 Apache2; actual Maven POM and source jar inspected.
+Latest upstream2.0.1 needs Kotlin2.4.10/Compose1.12/SDK37; this build uses the
+Compose1.9 compatible fixed1.0.1. Published AAR used without source modifications.
+Backdrop attribution and Apache2 text verified inside final APK.
+
+APK: app/build/outputs/apk/debug/app-debug.apk (test signed, installable app)
+SHA256: EF2B16D7C6A9EC1AB7E42B4B65F10411E12A1375074AEF46A83CC467023FE67F
+
+Not claimed: physical Wi-Fi NSD, OEM autostart behavior, third-party music player
+coverage, physical Bluetooth output, battery consumption while screen off.
+
+Delivery follow-up: unsupported optical toggle is now disabled/unchecked below API33, with the existing help still accessible. Rebuilt testDebugUnitTest/lintDebug/assembleDebug successfully. Latest lint: 0 errors,19 warnings. Latest APK installed and launched on both emulator-5554(API30) and emulator-5556(API33). Latest SHA256 D8A14479D5A87638ABBDD9ABF47C5AEC4B50A982A456FAC7E160880FE313A463. Build log: artifacts/android-redesign-delivery-build.log. API30 disabled state verified via artifacts/dml-low-api.xml.

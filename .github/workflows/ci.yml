@@ -1,0 +1,63 @@
+name: Build and test
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  protocol:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install -r scripts/requirements.txt
+      - run: python scripts/check-protocol.py
+      - run: python scripts/check-resources.py
+  android:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v3
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.14.3'
+      - run: gradle -p android testDebugUnitTest lintDebug assembleDebug --no-daemon
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Android-test-signed-APK
+          path: android/app/build/outputs/apk/debug/*.apk
+          if-no-files-found: error
+  windows:
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v4
+      - uses: jurplel/install-qt-action@v4
+        with:
+          version: '6.11.1'
+          arch: win64_msvc2022_64
+          modules: qtwebsockets
+          cache: true
+      - uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
+      - name: Native system integration
+        shell: pwsh
+        run: ./scripts/build-native.ps1
+      - run: cmake -S windows -B build/windows -G Ninja -DCMAKE_BUILD_TYPE=Release
+      - run: cmake --build build/windows --parallel
+      - run: ctest --test-dir build/windows --output-on-failure
+      - name: Package portable application
+        shell: pwsh
+        run: ./scripts/package-windows.ps1 -QtPath $env:QT_ROOT_DIR
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Windows-x64
+          path: artifacts/DroidMediaLink-*
+          if-no-files-found: error

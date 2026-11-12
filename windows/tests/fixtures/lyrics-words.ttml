@@ -1,0 +1,5 @@
+<tt xmlns:ttm="http://www.w3.org/ns/ttml#metadata"><body><div>
+<p begin="0s" end="3s"><span begin="0s" end="1s">逐字</span><span begin="1s" end="2s">高亮</span><span begin="2s" end="3s">测试</span><span ttm:role="x-translation">Word highlighting test</span><span ttm:role="x-roman">zhu zi gao liang ce shi</span></p>
+<p begin="3s" end="6s"><span begin="3s" end="4s">暂停 </span><span begin="4s" end="5s">与 </span><span begin="5s" end="6s">跳转</span><span ttm:role="x-translation">Pause and seek test</span></p>
+<p begin="6s" end="9s"><span begin="6s" end="7s">TEST </span><span begin="7s" end="8s">WORDS </span><span begin="8s" end="9s">ONLY</span></p>
+</div></body></tt>

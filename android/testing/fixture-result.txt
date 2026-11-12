@@ -1,0 +1,9 @@
+Executed 2026-11-11, Android emulator-5554 API30 x86, Windows11 host.
+Command: adb shell am instrument -w -e class org.droidmedialink.android.MediaSessionFixtureTest org.droidmedialink.android.test/androidx.test.runner.AndroidJUnitRunner
+org.droidmedialink.android.MediaSessionFixtureTest:.
+Time: 55.337
+OK (1 test)
+
+This isolated test creates a real Android MediaSession labelled TEST SESSION.
+It confirms callback delivery for play, pause and seek(42000) from the Qt WSS link_probe client.
+No audio stream is created. This is not verification of a third-party player or Bluetooth audio.

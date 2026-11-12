@@ -1,0 +1,460 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://droidmedialink.local/protocol/v1",
+  "title": "DroidMediaLink envelope v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "protocolVersion",
+    "messageId",
+    "timestamp",
+    "type",
+    "payload"
+  ],
+  "properties": {
+    "protocolVersion": {
+      "const": 1
+    },
+    "messageId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "timestamp": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "type": {
+      "enum": [
+        "hello",
+        "capabilities",
+        "pair_approve",
+        "auth",
+        "auth_result",
+        "session_snapshot",
+        "session_changed",
+        "metadata_changed",
+        "artwork_info",
+        "playback_state",
+        "position_anchor",
+        "volume_state",
+        "available_commands",
+        "command_request",
+        "command_result",
+        "lyrics_available",
+        "lyrics_payload",
+        "ping",
+        "pong",
+        "error",
+        "disconnect",
+        "pair_begin",
+        "pair_challenge",
+        "pair_reveal",
+        "pair_compare",
+        "pair_cancel"
+      ]
+    },
+    "payload": {
+      "type": "object"
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "type": {
+            "const": "auth"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "payload": {
+            "required": [
+              "clientId",
+              "token"
+            ],
+            "properties": {
+              "clientId": {
+                "type": "string",
+                "minLength": 1
+              },
+              "token": {
+                "type": "string",
+                "minLength": 32
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "type": {
+            "const": "command_request"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "payload": {
+            "required": [
+              "requestId",
+              "command"
+            ],
+            "properties": {
+              "requestId": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 128
+              },
+              "command": {
+                "enum": [
+                  "play",
+                  "pause",
+                  "toggle",
+                  "previous",
+                  "next",
+                  "seek",
+                  "volume"
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "type": {
+            "const": "command_request"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "payload": {
+            "properties": {
+              "positionMs": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "volume": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1
+              }
+            },
+            "allOf": [
+              {
+                "if": {
+                  "properties": {
+                    "command": {
+                      "const": "seek"
+                    }
+                  }
+                },
+                "then": {
+                  "required": [
+                    "positionMs"
+                  ]
+                }
+              },
+              {
+                "if": {
+                  "properties": {
+                    "command": {
+                      "const": "volume"
+                    }
+                  }
+                },
+                "then": {
+                  "required": [
+                    "volume"
+                  ]
+                }
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "type": {
+            "const": "auth_result"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "payload": {
+            "properties": {
+              "authenticated": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "authenticated"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "type": {
+            "const": "pair_approve"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "payload": {
+            "properties": {
+              "clientId": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 128
+              },
+              "token": {
+                "type": "string",
+                "minLength": 32,
+                "maxLength": 128
+              }
+            },
+            "required": [
+              "clientId",
+              "token"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "type": {
+            "const": "command_result"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "payload": {
+            "properties": {
+              "requestId": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 128
+              },
+              "success": {
+                "type": "boolean"
+              },
+              "error": {
+                "type": "string",
+                "maxLength": 512
+              }
+            },
+            "required": [
+              "requestId",
+              "success"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "type": {
+            "const": "session_snapshot"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "payload": {
+            "properties": {
+              "title": {
+                "type": "string",
+                "maxLength": 4096
+              },
+              "artist": {
+                "type": "string",
+                "maxLength": 4096
+              },
+              "album": {
+                "type": "string",
+                "maxLength": 4096
+              },
+              "appName": {
+                "type": "string",
+                "maxLength": 4096
+              },
+              "packageName": {
+                "type": "string",
+                "maxLength": 4096
+              },
+              "sessionId": {
+                "type": "string",
+                "maxLength": 4096
+              },
+              "durationMs": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "positionMs": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "speed": {
+                "type": "number"
+              },
+              "state": {
+                "enum": [
+                  "playing",
+                  "paused",
+                  "stopped"
+                ]
+              },
+              "commands": {
+                "type": "array",
+                "maxItems": 32,
+                "uniqueItems": true,
+                "items": {
+                  "enum": [
+                    "play",
+                    "pause",
+                    "toggle",
+                    "previous",
+                    "next",
+                    "seek",
+                    "volume"
+                  ]
+                }
+              },
+              "artwork": {
+                "type": "string",
+                "maxLength": 349528
+              }
+            },
+            "required": []
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "type": {
+            "const": "pair_begin"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "payload": {
+            "required": [
+              "clientId",
+              "clientName",
+              "clientCommit"
+            ],
+            "properties": {
+              "clientId": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 128
+              },
+              "clientName": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 80
+              },
+              "clientCommit": {
+                "type": "string",
+                "pattern": "^[0-9a-fA-F]{64}$"
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "type": {
+            "const": "pair_challenge"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "payload": {
+            "required": [
+              "serverCommit"
+            ],
+            "properties": {
+              "serverCommit": {
+                "type": "string",
+                "pattern": "^[0-9a-fA-F]{64}$"
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "type": {
+            "const": "pair_reveal"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "payload": {
+            "required": [
+              "clientNonce"
+            ],
+            "properties": {
+              "clientNonce": {
+                "type": "string",
+                "pattern": "^[0-9a-fA-F]{64}$"
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "type": {
+            "const": "pair_compare"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "payload": {
+            "required": [
+              "serverNonce"
+            ],
+            "properties": {
+              "serverNonce": {
+                "type": "string",
+                "pattern": "^[0-9a-fA-F]{64}$"
+              }
+            }
+          }
+        }
+      }
+    }
+  ]
+}

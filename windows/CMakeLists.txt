@@ -1,0 +1,82 @@
+cmake_minimum_required(VERSION 3.24)
+project(DroidMediaLink VERSION 0.1.0 LANGUAGES CXX)
+set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+find_package(Qt6 6.8 REQUIRED COMPONENTS Core Gui Widgets Quick QuickControls2 QuickDialogs2 Network WebSockets ShaderTools)
+qt_standard_project_setup(REQUIRES 6.8)
+# Native Quick frame, pinned Apache-2.0 QWindowKit. No replacement UI framework.
+find_package(Qt6 REQUIRED COMPONENTS CorePrivate GuiPrivate QuickPrivate)
+set(QWINDOWKIT_BUILD_STATIC ON CACHE BOOL "" FORCE)
+set(QWINDOWKIT_BUILD_WIDGETS OFF CACHE BOOL "" FORCE)
+set(QWINDOWKIT_BUILD_QUICK ON CACHE BOOL "" FORCE)
+set(QWINDOWKIT_INSTALL OFF CACHE BOOL "" FORCE)
+set(QWINDOWKIT_ENABLE_WINDOWS_SYSTEM_BORDERS ON CACHE BOOL "" FORCE)
+add_subdirectory(vendor/qwindowkit EXCLUDE_FROM_ALL)
+qt_add_executable(DroidMediaLink WIN32 src/main.cpp src/Bridge.cpp src/Bridge.h src/TrayPerformance.cpp src/TrayPerformance.h)
+qt_add_qml_module(DroidMediaLink URI DroidMediaLink VERSION 1.0 QML_FILES qml/Main.qml qml/Icons.js qml/GlassMaterial.qml qml/DesignTokens.qml qml/AmbientField.qml qml/CoverArtwork.qml qml/SettingsPage.qml qml/LyricView.qml qml/DesktopLyricsWindow.qml SOURCES src/LyricTimeline.h src/NativeWindowController.h src/NativeWindowController.cpp)
+target_include_directories(DroidMediaLink PRIVATE src)
+target_link_libraries(DroidMediaLink PRIVATE QWKQuick Qt6::Widgets Qt6::Quick Qt6::QuickControls2 Qt6::QuickDialogs2 Qt6::Network Qt6::WebSockets crypt32 dwmapi psapi)
+install(TARGETS DroidMediaLink RUNTIME DESTINATION .)
+if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/../artifacts/native/WindowsNative.dll")
+ add_custom_command(TARGET DroidMediaLink POST_BUILD COMMAND ${CMAKE_COMMAND} -E copy_if_different "${CMAKE_CURRENT_SOURCE_DIR}/../artifacts/native/WindowsNative.dll" "$<TARGET_FILE_DIR:DroidMediaLink>/WindowsNative.dll")
+endif()
+enable_testing()
+qt_add_executable(core_tests tests/core_tests.cpp src/Bridge.cpp src/Bridge.h)
+target_include_directories(core_tests PRIVATE src)
+target_link_libraries(core_tests PRIVATE Qt6::Gui Qt6::Qml Qt6::Network Qt6::WebSockets crypt32)
+add_test(NAME core_tests COMMAND core_tests)
+qt_add_executable(link_probe tests/link_probe.cpp src/Bridge.cpp src/Bridge.h)
+target_include_directories(link_probe PRIVATE src)
+target_link_libraries(link_probe PRIVATE Qt6::Gui Qt6::Qml Qt6::Network Qt6::WebSockets crypt32)
+
+qt_add_resources(DroidMediaLink "lucide_icons" PREFIX "/icons" BASE "${CMAKE_CURRENT_SOURCE_DIR}/../assets/vendor/lucide/font" FILES "${CMAKE_CURRENT_SOURCE_DIR}/../assets/vendor/lucide/font/lucide.ttf")
+# Build-tree tests must find Qt and the compiler runtime without a developer PATH.
+if(WIN32)
+ get_filename_component(DML_COMPILER_BIN "${CMAKE_CXX_COMPILER}" DIRECTORY)
+ set_tests_properties(core_tests PROPERTIES TIMEOUT 30 ENVIRONMENT_MODIFICATION "PATH=path_list_prepend:$<TARGET_FILE_DIR:Qt6::Core>;PATH=path_list_prepend:${DML_COMPILER_BIN}")
+endif()
+
+# liquidglass Qt preview, pinned source and attribution in vendor/liquidglass.
+function(dml_add_glass_resources target)
+ qt_add_resources(${target} "${target}_liquidglass_qml" PREFIX "/qt/qml/DroidMediaLink" FILES
+  vendor/liquidglass/LiquidGlass/GlassSurface.qml
+  vendor/liquidglass/LiquidGlass/GlassEffect.qml
+  vendor/liquidglass/LiquidGlass/material.js
+  vendor/liquidglass/LiquidGlass/qmldir)
+ qt_add_shaders(${target} "${target}_liquidglass_shaders" PRECOMPILE BATCHABLE
+  PREFIX "/qt/qml/DroidMediaLink/vendor/liquidglass/LiquidGlass/shaders"
+  BASE "${CMAKE_CURRENT_SOURCE_DIR}/vendor/liquidglass/LiquidGlass/shaders"
+  GLSL "300 es,330" HLSL 50 MSL 12
+  FILES vendor/liquidglass/LiquidGlass/shaders/liquidglass.vert
+        vendor/liquidglass/LiquidGlass/shaders/liquidglass.frag)
+endfunction()
+dml_add_glass_resources(DroidMediaLink)
+qt_add_executable(glass_smoke tests/glass_smoke.cpp)
+target_link_libraries(glass_smoke PRIVATE Qt6::Quick)
+dml_add_glass_resources(glass_smoke)
+set_source_files_properties(tests/GlassSmoke.qml PROPERTIES QT_RESOURCE_ALIAS "qml/GlassSmoke.qml")
+qt_add_resources(glass_smoke "glass_smoke_qml" PREFIX "/qt/qml/DroidMediaLink" FILES
+ tests/GlassSmoke.qml qml/GlassMaterial.qml)
+
+qt_add_shaders(DroidMediaLink "ambient_shaders" PRECOMPILE
+ PREFIX "/qt/qml/DroidMediaLink/shaders" BASE "${CMAKE_CURRENT_SOURCE_DIR}/shaders"
+ GLSL "300 es,330" HLSL 50 MSL 12 FILES shaders/ambient.frag)
+
+qt_add_executable(lyrics_tests tests/lyrics_tests.cpp)
+target_include_directories(lyrics_tests PRIVATE src)
+target_link_libraries(lyrics_tests PRIVATE Qt6::Core)
+add_test(NAME lyrics_tests COMMAND lyrics_tests)
+qt_add_executable(lyrics_smoke tests/lyrics_smoke.cpp)
+target_include_directories(lyrics_smoke PRIVATE src)
+target_link_libraries(lyrics_smoke PRIVATE Qt6::Quick Qt6::QuickControls2)
+if(WIN32)
+ set_tests_properties(lyrics_tests PROPERTIES TIMEOUT 30 ENVIRONMENT_MODIFICATION "PATH=path_list_prepend:$<TARGET_FILE_DIR:Qt6::Core>;PATH=path_list_prepend:${DML_COMPILER_BIN}")
+endif()
+
+qt_add_executable(lyrics_engine_tests tests/lyrics_engine_tests.cpp src/Bridge.cpp src/Bridge.h)
+target_include_directories(lyrics_engine_tests PRIVATE src)
+target_link_libraries(lyrics_engine_tests PRIVATE Qt6::Gui Qt6::Qml Qt6::Network Qt6::WebSockets crypt32)
+add_test(NAME lyrics_engine_tests COMMAND lyrics_engine_tests)
+if(WIN32)
+ set_tests_properties(lyrics_engine_tests PROPERTIES TIMEOUT 30 ENVIRONMENT_MODIFICATION "PATH=path_list_prepend:$<TARGET_FILE_DIR:Qt6::Core>;PATH=path_list_prepend:${DML_COMPILER_BIN}")
+endif()

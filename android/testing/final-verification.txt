@@ -1,0 +1,30 @@
+2026-11-11, Windows 11 host, Android emulator-5554 API30 x86.
+
+Final source checks:
+Gradle 8.14.3 / JDK17 / SDK36, offline cached dependencies.
+lintDebug testDebugUnitTest assembleDebug assembleDebugAndroidTest: BUILD SUCCESSFUL.
+Four JVM tests, zero failures/errors; lint zero errors, 14 warnings.
+Full build output: final-build.txt. Lint: app/build/reports/lint-results-debug.html.
+
+Fixed and checked:
+- Consumed (empty) pairing code is rejected; regression test included.
+- Reopening the application restores a previously enabled service.
+  Installed final app-debug.apk, force-stopped package, launched MainActivity.
+  am start -W returned Status: ok; dumpsys reported PassiveLinkService
+  isForeground=true, foregroundId=1, startRequested=true.
+  Raw service evidence: reopen-service.txt.
+- Instrumentation inspection hold is optional via -e holdSeconds (0..600).
+  TEST SESSION exists only in androidTest source, without an audio stream.
+
+Cross-platform control verification:
+See artifacts/smtc-android-instrumentation.log and native SMTC verification.
+The coordinator's real Android fixture run finished OK (1 test), 233.542s.
+This fixture does not validate third-party music players or Bluetooth output.
+
+Final test-signed production APK:
+artifacts/DroidMediaLink-0.1.0-android-test.apk
+SHA256 D74036CE30137FCE18100E709ADF3767249DFF0AAFBA0B7C1DA46DF465D16DD4
+Despite the artifact suffix, this is app-debug.apk, not the instrumentation APK.
+
+Not device verified: third-party players, physical Bluetooth/Wi-Fi discovery,
+Android14-16 FGS/boot restrictions, OEM recovery, screen-off battery behavior.
