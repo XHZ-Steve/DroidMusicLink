@@ -14,3 +14,5 @@ GlassMaterial.qml is the application adapter. Its optional configuration map exp
 
 The surface uses the upstream rounded signed distance field with refraction, RGB dispersion, bevel lighting, Fresnel and blur taps. It is intended for local dock/popup/floating roles, not a full-window overlay. The disabled style intentionally uses an ordinary rounded opaque surface. No frame animation runs unless followsMovement is explicitly requested; set active to the owning Window.visible. Hidden-source capture is still supported. Reduced-transparency and increased-contrast upstream uniforms remain available for accessibility hosts.
 
+
+Local shader patch (2026-11-12): liquidglass.frag uses fwidth of the analytic shape distance for contour coverage rather than a fixed 1.5-device-pixel transition. This smooths small circular play buttons and fractional-DPI silhouettes without lowering capture resolution or adding blur. The modified generated shader is intentionally maintained as an application patch; preserve it when regenerating from upstream.

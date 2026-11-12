@@ -74,4 +74,7 @@
   <string name="settings_unavailable">此手机无法打开该设置页面，可以跳过此项。</string>
   <string name="open_settings">前往设置</string>
   <string name="skip">跳过</string>
+  <string name="background_settings">后台</string>
+  <string name="expand_media">展开媒体设置</string>
+  <string name="collapse_media">折叠媒体设置</string>
 </resources>

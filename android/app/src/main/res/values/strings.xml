@@ -74,4 +74,7 @@
   <string name="settings_unavailable">This settings page is unavailable on this phone. You can skip this step.</string>
   <string name="open_settings">Open settings</string>
   <string name="skip">Skip</string>
+  <string name="background_settings">Background</string>
+  <string name="expand_media">Expand media settings</string>
+  <string name="collapse_media">Collapse media settings</string>
 </resources>

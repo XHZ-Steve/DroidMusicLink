@@ -17,7 +17,16 @@ Slider {
     function fraction(x){const t=Math.max(0,Math.min(span,x));const length=Math.PI*r+span-2*r;return (t<r?r*Math.acos((r-t)/r):t>span-r?Math.PI*r/2+span-2*r+r*Math.asin((t-span+r)/r):Math.PI*r/2+t-r)/Math.max(1,length)}
     containmentMask:QtObject{function contains(point){return point.x>=0&&point.x<=control.width&&Math.abs(point.y-control.edgeY(point.x-1.5))<=9}}
     background:Shape {
-        width:control.width;height:control.height
+        width:control.width;height:control.r+1.5
+        // Both open ends are at the bottom of this upper-half path. Fade only
+        // the rendered stroke; Slider hit testing and keyboard input stay intact.
+        layer.enabled:control.visible&&GraphicsInfo.api!==GraphicsInfo.Software
+        layer.smooth:true
+        layer.effect:ShaderEffect {
+            property variant source
+            property vector4d fading:Qt.vector4d(0,.72,1,0)
+            fragmentShader:"qrc:/qt/qml/DroidMediaLink/shaders/lyricfade.frag.qsb"
+        }
         preferredRendererType:Shape.CurveRenderer
         ShapePath {
             fillColor:"transparent";strokeColor:control.trackColor;strokeWidth:3;capStyle:ShapePath.RoundCap

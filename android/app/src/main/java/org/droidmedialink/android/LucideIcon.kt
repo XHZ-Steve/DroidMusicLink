@@ -8,6 +8,8 @@ import androidx.compose.ui.text.font.*
 import androidx.compose.ui.semantics.*
 import androidx.compose.ui.unit.*
 object Lucide {
+ const val ChevronDown:Int=57453
+ const val ChevronUp:Int=57456
  const val Home:Int=57589
  const val Computer:Int=57629
  const val Settings:Int=57684

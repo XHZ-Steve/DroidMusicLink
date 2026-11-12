@@ -18,6 +18,8 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.ui.*
 import androidx.compose.ui.graphics.*
 import androidx.compose.ui.platform.LocalContext
@@ -73,7 +75,7 @@ class MainActivity:ComponentActivity() {
  val connected by Hub.connected.collectAsStateWithLifecycle()
  val pending by Hub.pending.collectAsStateWithLifecycle()
  var page by remember { mutableIntStateOf(0) }
- var settingsSection by remember { mutableIntStateOf(0) }
+ var mediaExpanded by rememberSaveable { mutableStateOf(false) }
  var confirmReset by remember { mutableStateOf(false) }
  var confirmRevoke by remember { mutableStateOf<Pair<String,String>?>(null) }
  var help by remember { mutableStateOf<Int?>(null) }
@@ -90,7 +92,7 @@ class MainActivity:ComponentActivity() {
   Box(Modifier.fillMaxSize()) {
    Box(Modifier.fillMaxSize().background(Brush.linearGradient(listOf(scheme.primaryContainer,scheme.surface,scheme.secondaryContainer))))
   Scaffold(containerColor=Color.Transparent,contentColor=scheme.onSurface) { padding->
-   Column(Modifier.fillMaxSize().then(if(glass) Modifier.layerBackdrop(backdrop) else Modifier).padding(padding).background(Brush.verticalGradient(listOf(scheme.primaryContainer.copy(alpha=.45f),scheme.surface,scheme.surface))).verticalScroll(remember(page,settingsSection) { ScrollState(0) }).padding(horizontal=24.dp).padding(top=24.dp,bottom=130.dp),verticalArrangement=Arrangement.spacedBy(20.dp)) {
+   Column(Modifier.fillMaxSize().then(if(glass) Modifier.layerBackdrop(backdrop) else Modifier).padding(padding).background(Brush.verticalGradient(listOf(scheme.primaryContainer.copy(alpha=.45f),scheme.surface,scheme.surface))).verticalScroll(remember(page) { ScrollState(0) }).padding(horizontal=24.dp).padding(top=24.dp,bottom=130.dp),verticalArrangement=Arrangement.spacedBy(20.dp)) {
     Text(stringResource(when(page){1->R.string.devices;2->R.string.settings;else->R.string.app_name}),style=MaterialTheme.typography.headlineLarge,fontWeight=FontWeight.SemiBold)
     if(error.isNotEmpty() && page!=0)Text(error,color=scheme.error)
     if(page==0) {
@@ -128,34 +130,34 @@ class MainActivity:ComponentActivity() {
      } }
     }
     if(page==2) {
-     FlowRow(horizontalArrangement=Arrangement.spacedBy(8.dp)) {
-      listOf(R.string.connection_background,R.string.media_settings,R.string.appearance_settings,R.string.app_settings).forEachIndexed { i,title ->
-       FilterChip(settingsSection==i,{settingsSection=i},label={Text(stringResource(title))})
-      }
-     }
-     if(settingsSection==0) {
-     TextButton(onClick={recommendations=true}) { Text(stringResource(R.string.recommended_settings)) }
-
-      SettingSwitch(R.string.auto_start,Hub.bool("autoStart"),{Hub.set("autoStart",it)},{help=R.string.background_help})
-      TextButton(onClick={context.startActivity(Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS))}) { Text(stringResource(R.string.battery_settings)) }
-     
-     }
-     if(settingsSection==2) {
+     Text(stringResource(R.string.appearance_settings),style=MaterialTheme.typography.titleMedium,color=scheme.primary)
      SettingSwitch(R.string.liquid_glass,Build.VERSION.SDK_INT>=33 && Hub.bool("liquidGlass"),{Hub.set("liquidGlass",it)},{help=R.string.liquid_glass_help},enabled=Build.VERSION.SDK_INT>=33)
 
       Text(stringResource(R.string.theme),style=MaterialTheme.typography.titleMedium)
       FlowRow(horizontalArrangement=Arrangement.spacedBy(8.dp)) { listOf("" to R.string.system,"light" to R.string.light,"dark" to R.string.dark).forEach { (value,label)->FilterChip(Hub.string("theme")==value,{Hub.set("theme",value)},label={Text(stringResource(label))}) } }
      
+     HorizontalDivider(color=scheme.outlineVariant.copy(alpha=.45f))
+     Text(stringResource(R.string.background_settings),style=MaterialTheme.typography.titleMedium,color=scheme.primary)
+     TextButton(onClick={recommendations=true}) { Text(stringResource(R.string.recommended_settings)) }
 
+      SettingSwitch(R.string.auto_start,Hub.bool("autoStart"),{Hub.set("autoStart",it)},{help=R.string.background_help})
+      TextButton(onClick={context.startActivity(Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS))}) { Text(stringResource(R.string.battery_settings)) }
+     
+     HorizontalDivider(color=scheme.outlineVariant.copy(alpha=.45f))
+     TextButton(onClick={mediaExpanded=!mediaExpanded},modifier=Modifier.fillMaxWidth(),contentPadding=PaddingValues(vertical=4.dp)) {
+      Text(stringResource(R.string.media_settings),Modifier.weight(1f),style=MaterialTheme.typography.titleMedium)
+      LucideIcon(if(mediaExpanded)Lucide.ChevronUp else Lucide.ChevronDown,stringResource(if(mediaExpanded)R.string.collapse_media else R.string.expand_media))
      }
-     if(settingsSection==1) {
+     AnimatedVisibility(visible=mediaExpanded) {
+      Column(verticalArrangement=Arrangement.spacedBy(16.dp)) {
       OutlinedTextField(Hub.string("preferred"),{Hub.set("preferred",it)},label={Text(stringResource(R.string.preferred_app))},modifier=Modifier.fillMaxWidth(),singleLine=true)
       OutlinedTextField(Hub.string("excluded"),{Hub.set("excluded",it)},label={Text(stringResource(R.string.excluded_apps))},modifier=Modifier.fillMaxWidth(),singleLine=true)
      
      TextButton(onClick={context.startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))}) { Text(stringResource(R.string.media_permission)) }
-
+      }
      }
-     if(settingsSection==3) {
+     HorizontalDivider(color=scheme.outlineVariant.copy(alpha=.45f))
+     Text(stringResource(R.string.app_settings),style=MaterialTheme.typography.titleMedium,color=scheme.primary)
       Text(stringResource(R.string.language),style=MaterialTheme.typography.titleMedium)
       FlowRow(horizontalArrangement=Arrangement.spacedBy(8.dp)) { listOf("" to R.string.system,"en" to R.string.english,"zh-CN" to R.string.chinese).forEach { (value,label)->FilterChip(Hub.string("language")==value,{(context as MainActivity).language(value)},label={Text(stringResource(label))}) } }
      
@@ -175,7 +177,6 @@ class MainActivity:ComponentActivity() {
       FlowRow { TextButton(onClick={(context as MainActivity).exportPreferences()}) { Text(stringResource(R.string.export_settings)) };TextButton(onClick={(context as MainActivity).importPreferences()}) { Text(stringResource(R.string.import_settings)) };TextButton(onClick={confirmReset=true}) { Text(stringResource(R.string.reset_settings)) } }
      
      Text("DroidMediaLink "+BuildConfig.VERSION_NAME,style=MaterialTheme.typography.labelMedium,color=scheme.onSurfaceVariant)
-     }
     }
    }
   }
