@@ -32,6 +32,12 @@
 #include <dwmapi.h>
 #include <QPointer>
 #include <functional>
+class DragRefreshGuard final:public QAbstractNativeEventFilter {
+ Bridge &bridge;QSet<HWND> moving;
+public:explicit DragRefreshGuard(Bridge &value):bridge(value){}
+ ~DragRefreshGuard(){if(auto app=QCoreApplication::instance())app->removeNativeEventFilter(this);}
+ bool nativeEventFilter(const QByteArray &,void *message,qintptr *)override{auto msg=static_cast<MSG*>(message);if(msg->message==WM_ENTERSIZEMOVE){moving.insert(msg->hwnd);bridge.setDragging(true);}else if(msg->message==WM_EXITSIZEMOVE){moving.remove(msg->hwnd);bridge.setDragging(!moving.isEmpty());}return false;}
+};
 class LinkApplication final:public QApplication {
 public:
  using QApplication::QApplication;
@@ -52,7 +58,7 @@ int main(int argc,char **argv){
  QLocalSocket existing;existing.connectToServer(instanceName);if(existing.waitForConnected(150)){existing.write("activate");existing.waitForBytesWritten(200);return 0;}QLocalServer::removeServer(instanceName);QLocalServer server;server.listen(instanceName);
  QTranslator translator;QSettings settings;QString locale=settings.value("preferences/language",QLocale::system().name()).toString();if(translator.load("droidmedialink_"+locale,QCoreApplication::applicationDirPath()+"/translations"))app.installTranslator(&translator);
  if(profileIndex>=0){const auto args=app.arguments();int at=args.indexOf("--test-style");if(at>=0&&at+1<args.size())settings.setValue("preferences/appearance/style",args[at+1]=="liquid"?"liquid":"standard");if(args.contains("--test-light"))settings.setValue("preferences/light",true);}
- Bridge backend;
+ Bridge backend;DragRefreshGuard dragRefresh(backend);app.installNativeEventFilter(&dragRefresh);
  if(profileIndex>=0){const auto args=app.arguments();int at=args.indexOf("--preview-media");if(at>=0&&at+1<args.size()){QFile file(args[at+1]);if(file.open(QIODevice::ReadOnly)&&file.size()<=65536)backend.previewMediaForTest(QJsonDocument::fromJson(file.readAll()).object());}at=args.indexOf("--test-layout");if(at>=0&&at+1<args.size())backend.setSetting("home/layout",args[at+1].toInt());}
  if(profileIndex>=0){const auto args=app.arguments();int at=args.indexOf("--preview-cover");if(at>=0&&at+1<args.size())backend.previewCoverForTest(args[at+1]);}
  if(profileIndex>=0){const auto args=app.arguments();int at=args.indexOf("--preview-lyrics");if(at>=0&&at+1<args.size())backend.importLyrics(QUrl::fromLocalFile(QFileInfo(args[at+1]).absoluteFilePath()));}

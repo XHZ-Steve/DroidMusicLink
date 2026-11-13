@@ -1,47 +1,43 @@
 # DroidMediaLink
 
-Bridge Android's current media session to Windows. Audio stays on your phone
-and its Bluetooth output. Windows displays metadata, forwards controls, shows
-lyrics and publishes native system media controls; no audio is streamed.
+[简体中文](README.md) · [Build instructions](docs/build-and-release.md) · [CI builds](https://github.com/XHZ-Steve/DroidMusicLink/actions)
 
-![Actual Windows app, disconnected state](docs/screenshots/windows-home-1120.png)
-![Actual Android app](docs/screenshots/android-home.png)
+Bring your Android media session to Windows: artwork, playback controls, synchronized lyrics and Windows system media controls. Audio stays on your phone and its headphones; this is not an audio-streaming application.
 
-The product name is **DroidMediaLink**; the existing repository is
-`git@github.com:XHZ-Steve/DroidMusicLink.git`. These identify the same project.
-Android's stable application ID is `org.droidmedialink.android`.
+## Running on real devices
 
-1. Install the Android test-signed APK, grant notification-listener access and
-   notification permission, then start the service.
-2. On the same LAN, click Search devices in Windows and select the phone name.
-3. Compare the numbers on both screens and confirm on the phone. No address,
-   fingerprint or code entry is needed. Trusted devices reconnect automatically.
-4. Play in your existing phone music app. Available controls follow its actual
-   standard MediaSession capabilities.
+![Windows connected to an actual Android media session](docs/screenshots/windows-current.png)
 
-Android passively listens; Windows discovers, authenticates and reconnects.
-Pairing requires local phone approval and can be revoked. Do not forward the
-phone listener port onto the public internet.
+<img src="docs/screenshots/android-current.png" width="360" alt="Android app captured on a physical phone using ADB" />
 
-The stack is C++20/Qt Quick/Win32/C++WinRT on Windows and Kotlin/Compose
-Material 3 on Android (minimum API 26, target 36). Windows 11 x64 is the main
-target; Windows 10 material effects degrade. See [build instructions](docs/build-and-release.md),
-[protocol](protocol/README.md), [test records](docs/testing.md),
-[privacy](docs/privacy.md), and [limitations](docs/known-limitations.md).
+These are actual application captures taken at different times, not mockups or preview media.
 
-Local build outputs go to ignored `artifacts/`. CI uploads test artifacts and
-does not publish releases. No production signing key is supplied: APKs are
-test-signed and Windows packages lack Authenticode. Implementation, compilation,
-automated checks and real-device verification are distinct; consult test records.
+## Features
 
-Missing media usually requires notification-listener authorization or a player
-that exposes MediaSession. Discovery may fail on isolated Wi-Fi networks; use
-manual addressing. Certificate changes require fingerprint verification and
-re-pairing. Android may stop background services; manual restoration can be
-necessary. Local LRC/TTML import is available; optional LRCLIB results may not
-match a particular recording.
+- LAN discovery, explicit matching-number authorization, saved pairing and reconnection.
+- Playback, seeking, volume and capability-dependent favorite controls.
+- Windows SMTC artwork, tray menu, floating player and always-on-top desktop lyrics.
+- Local and online lyrics, player-published phone lyrics, word/line timing and cross-source translation supplementation.
+- Cover-derived ambient colors, optional Liquid Glass, capsule progress and water-glass playback controls.
+- Chinese and English, persistent preferences and settings import/export.
 
-Project source is [MIT](LICENSE); dependencies retain their own licenses. Read
-[third-party notices](THIRD_PARTY_NOTICES.md).
+UI state updates pause during native window/component dragging and catch up on release; connection heartbeats continue. Factory appearance preferences reflect the maintainer's actual configuration without credentials, addresses or paired identities.
 
-[简体中文](README.md)
+## Get started
+
+1. Download Windows and Android artifacts from [GitHub Actions](https://github.com/XHZ-Steve/DroidMusicLink/actions). Extract the complete Windows portable archive.
+2. Install the Android APK, complete permission onboarding and enable the connection service.
+3. Put both devices on the same LAN. Find your phone in Windows Settings → Devices and connection, compare the numbers, and approve on the phone.
+4. Play music in your existing Android player. Control it from Windows; use the tray to reopen the main window.
+
+Android listens passively; Windows discovers and connects. No manual address or certificate input is required. Do not expose the service to the public internet.
+
+## Build and compatibility
+
+Windows: C++20, Qt Quick/QML and Win32/C++/WinRT, primarily Windows 11 x64. Android: Kotlin, Compose Material 3, Android 8.0/API 26 or newer.
+
+Player capabilities vary. Full phone lyrics and favorites require player-published interfaces. Online lyric providers may fail and fall back. APKs use development signing; Windows packages are not Authenticode-signed. CI uploads artifacts and does not automatically publish releases.
+
+See [build instructions](docs/build-and-release.md), [testing](docs/testing.md), [protocol](protocol/README.md), [privacy](docs/privacy.md), [known limitations](docs/known-limitations.md) and [third-party licenses](THIRD_PARTY_NOTICES.md).
+
+Product: **DroidMediaLink**. Repository: **DroidMusicLink**. Local build outputs live in `artifacts/` and are excluded from Git. See [LICENSE](LICENSE) for the project license.

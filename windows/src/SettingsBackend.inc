@@ -50,7 +50,7 @@ void Bridge::setSetting(QString key,QVariant value){
  if(key=="theme/source"||key=="theme/brand"){applyTheme();emit changed();}
  if(key=="media/smtc")updateNative();if(key.startsWith("lyrics/providers/"))emit lyricProvidersChanged();emit settingsChanged();
 }
-void Bridge::resetSettings(){m_settings.remove("preferences");m_settings.remove("appearance");m_settings.setValue("preferences/lyrics/autoMatchMigration",true);setSetting("general/autostart",false);cancelLyricRequest();m_lyricKey.clear();fetchLyrics();emit settingsChanged();}
+void Bridge::resetSettings(){m_settings.remove("preferences");m_settings.remove("appearance");for(auto defaults=factoryDefaults();auto key:defaults.keys())m_settings.setValue(key,defaults.value(key).toVariant());m_settings.setValue("preferences/lyrics/autoMatchMigration",true);setSetting("general/autostart",false);cancelLyricRequest();m_lyricKey.clear();fetchLyrics();emit settingsChanged();}
 namespace {
 QString lyricPresetKey(const QString &name){return "lyricPresets/custom/"+QString::fromLatin1(name.toUtf8().toBase64(QByteArray::Base64UrlEncoding|QByteArray::OmitTrailingEquals));}
 bool validLyricPresetName(const QString &name){return !name.isEmpty()&&name==name.trimmed()&&name.size()<=64&&std::none_of(name.begin(),name.end(),[](QChar ch){return ch.unicode()<32;});}

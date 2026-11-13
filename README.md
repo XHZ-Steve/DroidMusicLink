@@ -1,39 +1,46 @@
 # DroidMediaLink
 
-把 Android 当前媒体会话连接到 Windows。手机与蓝牙耳机照常播放；电脑显示歌曲、远程控制、歌词和 Windows 系统媒体控件，不传输音频。
+[English](README.en.md) · [构建说明](docs/build-and-release.md) · [GitHub Actions](https://github.com/XHZ-Steve/DroidMusicLink/actions)
 
-![Windows 实际运行界面，未连接状态](docs/screenshots/windows-home-1120.png)
-![Android 实际运行界面](docs/screenshots/android-home.png)
+将 Android 正在播放的音乐带到 Windows 桌面：同步歌曲、封面和进度，控制手机播放，显示同步歌词，并接入 Windows 系统媒体控件。音频仍由手机和原有耳机播放，不进行音频串流。
 
-产品名为 **DroidMediaLink**，仓库地址为 `git@github.com:XHZ-Steve/DroidMusicLink.git`，两者指同一项目。Android 包名固定为 `org.droidmedialink.android`，Windows 应用标识为 `DroidMediaLink.Desktop`。
+## 实际界面
 
-## 运行
+Windows 客户端连接真实手机媒体会话的播放画面，使用当前默认外观与歌词配置。
 
-1. Android 安装测试签名 APK，授予通知使用权和通知权限，启动服务。
-2. 两端位于同一局域网；Windows 点击“搜索设备”，选择手机名称。
-3. 核对电脑和手机显示的相同数字，在手机点击“数字一致，连接”。之后自动重连，无需填写地址、指纹或配对码。
-4. 在手机原有音乐 App 播放。电脑的可用控制以该 App 的真实 MediaSession 能力为准。
+![Windows 实际播放：封面氛围、同步歌词和胶囊控制栏](docs/screenshots/windows-current.png)
 
-Android 保持被动监听；Windows 主动发现、认证和重连。首次配对需要手机操作，授权可撤销。不要把手机端口转发到公网。
+Android 应用通过 ADB 在真实设备上截取；截图与 Windows 画面拍摄于不同时间。
 
-## 构建与验证
+<img src="docs/screenshots/android-current.png" width="360" alt="Android 实机：连接服务与当前媒体" />
 
-Windows：C++20、Qt 6 Quick/QML、Win32/C++/WinRT；Android：Kotlin、Compose Material 3，最低 Android 8.0/API 26，target 36。Windows 11 x64 是主目标；Windows 10 系统材质降级。
+## 功能
 
-参见[构建与打包](docs/build-and-release.md)、[协议](protocol/README.md)、[测试记录与矩阵](docs/testing.md)、[架构](docs/architecture.md)、[隐私](docs/privacy.md)、[已知限制](docs/known-limitations.md)。本地产物写入未纳入 Git 的 `artifacts/`。GitHub Actions 会构建并保留测试产物，不自动发布 Release。
+- **局域网连接**：电脑发现手机，首次核对两端数字并在手机确认；支持保存授权、撤销授权和自动重连。
+- **媒体控制**：播放、暂停、切歌、进度和音量同步；收藏按钮仅在播放器提供标准接口时出现。
+- **Windows 集成**：SMTC 歌曲与封面、托盘菜单、透明悬浮播放器和置顶桌面歌词。
+- **歌词**：本地导入、多来源匹配、手机公开歌词、逐字与逐行同步、翻译补全；主页与桌面歌词共用媒体时间轴。
+- **外观**：封面取色、可选 Liquid Glass 材质、胶囊进度条与水玻璃播放按钮；支持中文、英文及设置导入导出。
 
-没有生产签名密钥：APK 使用测试签名，Windows 包未做 Authenticode。源码实现、构建通过和实际设备验证是不同状态；以测试记录为准。
+拖动窗口或悬浮组件时暂停界面状态刷新，结束后恢复最新状态；连接心跳持续运行。默认外观来自维护者实际使用的偏好，不包含配对身份、地址或凭据。
 
-## 权限与常见问题
+## 开始使用
 
-- 没有媒体：检查通知使用权、播放器是否发布标准 MediaSession。
-- 找不到手机：检查同一网络、AP 客户端隔离、手机服务状态；确认手机服务已启动，重新搜索。
-- 设备身份变化：两端重新显示确认码，核对相同后在手机确认。
-- 服务停止：Android 后台限制和厂商策略可能需要手动恢复；不承诺永久驻留。
-- 没有歌词：可导入本地 LRC/TTML，在线歌词为可选 LRCLIB 请求，匹配结果不保证准确。
+1. 从 [Actions 构建产物](https://github.com/XHZ-Steve/DroidMusicLink/actions) 获取 Windows 包和 Android APK，完整解压 Windows 便携包。
+2. 手机安装 APK，按照首次引导授权通知使用权与必要后台权限，开启连接服务。
+3. 两端连接同一局域网，在电脑设置的“设备与连接”中搜索手机，核对两端数字并在手机确认。
+4. 在手机原来的音乐 App 中播放；之后可从电脑控制。关闭主窗口后可通过托盘返回。
 
-外观可选标准或液态玻璃。桌面采用 shayann07/liquidglass Qt 材质层，Android 采用 Kyant0/AndroidLiquidGlass 对应的 Backdrop；实际折射分别已在 Windows D3D11 和 Android API33 运行验证，旧系统保留标准控件样式。
+Android 被动监听，Windows 主动发现和连接。不需要手工输入地址、证书指纹或配对码。请勿将手机服务端口暴露到公网。
 
-项目采用 [MIT](LICENSE)；Qt 与其他依赖保留各自许可，详见[第三方声明](THIRD_PARTY_NOTICES.md)。
+## 兼容性与限制
 
-[English](README.en.md)
+Windows 使用 C++20、Qt 6 Quick/QML 与 Win32/C++/WinRT；Android 使用 Kotlin、Jetpack Compose 和 Material 3，最低 Android 8.0/API 26。Windows 11 x64 为主要目标。
+
+播放器必须发布标准 MediaSession。收藏、跳转、完整手机歌词等能力因播放器而异，未提供的接口不会被伪装为可用。网络歌词来源可能失败并降级。测试 APK 使用开发签名，Windows 包未做 Authenticode 签名；Actions 上传构建产物，不自动发布 Release。
+
+## 开发
+
+见 [构建与打包](docs/build-and-release.md)、[测试记录](docs/testing.md)、[协议](protocol/README.md)、[架构](docs/architecture.md)、[隐私](docs/privacy.md)及[已知限制](docs/known-limitations.md)。
+
+仓库名称为 DroidMusicLink，产品显示名为 **DroidMediaLink**。本地产物位于 `artifacts/`，不纳入 Git。第三方组件与授权见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)，项目许可证见 [LICENSE](LICENSE)。

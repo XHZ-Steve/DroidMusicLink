@@ -1,5 +1,6 @@
 #pragma once
 #include <QCoreApplication>
+#include "FactoryDefaults.h"
 #include <QVariant>
 #include <QColor>
 #include <QFontDatabase>
@@ -84,6 +85,7 @@ inline QVariantList descriptors(){
 
  // Compatibility keys stay valid but do not appear as duplicated settings rows.
 #undef S
+ for(auto defaults=factoryDefaults();auto &value:out){auto row=value.toMap();auto key="preferences/"+row["key"].toString();if(defaults.contains(key))row["defaultValue"]=defaults.value(key).toVariant();value=row;}
  return out;
  }();return catalog;
 }

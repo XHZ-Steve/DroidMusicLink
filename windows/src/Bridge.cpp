@@ -1,4 +1,5 @@
 #include "Bridge.h"
+#include "FactoryDefaults.h"
 #include "SettingsSchema.h"
 #include "AppearanceConfig.h"
 #include "LyricTimeline.h"
@@ -41,6 +42,7 @@ static Bridge *nativeOwner=nullptr;
 static void nativeCommand(const char *name,double value){QString command=QString::fromUtf8(name);if(auto app=QCoreApplication::instance())QMetaObject::invokeMethod(app,[command,value]{if(nativeOwner)nativeOwner->command(command,value);},Qt::QueuedConnection);}
 static QByteArray protect(QByteArray bytes,bool decrypt){DATA_BLOB input{DWORD(bytes.size()),reinterpret_cast<BYTE*>(bytes.data())},output{};BOOL ok=decrypt?CryptUnprotectData(&input,nullptr,nullptr,nullptr,nullptr,CRYPTPROTECT_UI_FORBIDDEN,&output):CryptProtectData(&input,L"DroidMediaLink",nullptr,nullptr,nullptr,CRYPTPROTECT_UI_FORBIDDEN,&output);if(!ok)return {};QByteArray result(reinterpret_cast<char*>(output.pbData),output.cbData);SecureZeroMemory(output.pbData,output.cbData);LocalFree(output.pbData);return result;}
 Bridge::Bridge(QObject *parent):QObject(parent),m_status(tr("Disconnected")){
+ for(auto defaults=factoryDefaults();auto key:defaults.keys())if(!m_settings.contains(key))m_settings.setValue(key,defaults.value(key).toVariant());
  if(!m_settings.value("preferences/lyrics/autoMatchMigration",false).toBool()){m_settings.setValue("preferences/lyrics/online",true);m_settings.setValue("preferences/lyrics/autoMatch",true);m_settings.setValue("preferences/lyrics/autoMatchMigration",true);}
  if(!m_settings.contains("preferences/desktopLyrics/fontSize")&&m_settings.contains("preferences/lyricSize"))m_settings.setValue("preferences/desktopLyrics/fontSize",m_settings.value("preferences/lyricSize"));
  // LAN discovery and phone traffic must bypass HTTP/SOCKS proxies.
@@ -133,12 +135,13 @@ QStringList Bridge::commands()const{QStringList list;for(const auto&v:m_media.va
 qint64 Bridge::position()const{qint64 value=m_position;if(playing()&&m_anchor.isValid())value+=qint64(m_anchor.elapsed()*qBound(-16.,m_media.value("speed").toDouble(1),16.));return qBound<qint64>(0,value,duration()>0?duration():std::numeric_limits<qint64>::max());}
 int Bridge::currentLine()const{return m_currentLyricLine;}
 void Bridge::setLyrics(QVariantList rows,QString source){m_lyrics=LyricTimeline::validated(rows);m_lyricSource=std::move(source);m_lyricsLoading=false;m_lyricTimes.clear();m_lyricTimes.reserve(m_lyrics.size());if(m_lyrics.isEmpty()||!m_lyrics.first().toMap().value("untimed").toBool())for(const auto &row:m_lyrics)m_lyricTimes<<row.toMap().value("time").toLongLong();emit lyricsChanged();updateLyricClock();}
-void Bridge::updateLyricClock(){const auto line=LyricTimeline::lineAt(m_lyricTimes,lyricPosition());if(line!=m_currentLyricLine){m_currentLyricLine=line;emit lyricLineChanged();}emit lyricProgressChanged();const bool run=m_uiVisible&&!m_lyricSurfaces.isEmpty()&&playing()&&!m_lyrics.isEmpty();if(run&&!m_lyricClock.isActive())m_lyricClock.start();else if(!run)m_lyricClock.stop();}
+void Bridge::updateLyricClock(){if(m_dragging)return;const auto line=LyricTimeline::lineAt(m_lyricTimes,lyricPosition());if(line!=m_currentLyricLine){m_currentLyricLine=line;emit lyricLineChanged();}emit lyricProgressChanged();const bool run=m_uiVisible&&!m_lyricSurfaces.isEmpty()&&playing()&&!m_lyrics.isEmpty();if(run&&!m_lyricClock.isActive())m_lyricClock.start();else if(!run)m_lyricClock.stop();}
 void Bridge::setLyricsVisible(QString surface,bool visible){if(surface.size()>100)return;if(visible)m_lyricSurfaces.insert(surface);else m_lyricSurfaces.remove(surface);updateLyricClock();}
 void Bridge::cancelLyricRequest(){++m_lyricGeneration;if(m_lyricProviders)m_lyricProviders->cancel();if(m_lyricReply){auto reply=m_lyricReply;m_lyricReply=nullptr;reply->abort();}m_lyricsLoading=false;}
 
 void Bridge::command(QString name,double value){if(!QStringList{"play","pause","toggle","next","previous","seek","volume","favorite"}.contains(name))return;if(!m_online||m_pending.size()>=64)return;static QElapsedTimer limit;static int burst=0;if(!limit.isValid()||limit.elapsed()>1000){limit.restart();burst=0;}if(++burst>20)return;QString capability=name=="toggle"?(playing()?"pause":"play"):name;if(!commands().contains(capability)&&!commands().contains(name)){emit notification(tr("Command unavailable"));return;}if(!std::isfinite(value)||(name=="favorite"&&value!=0&&value!=1))return;const auto id=QUuid::createUuid().toString(QUuid::WithoutBraces);QJsonObject p{{"requestId",id},{"command",name},{"value",value}};if(name=="seek"){value=qBound(0.,value,double(duration()));p["positionMs"]=value;p["value"]=value;}if(name=="volume")p["volume"]=qBound(0.,value,1.);if(name=="favorite"){p["sessionId"]=m_media.value("sessionId");p["title"]=title();p["artist"]=artist();p["album"]=album();}m_pending[id]=QDateTime::currentMSecsSinceEpoch();send("command_request",p);}
 void Bridge::applyMedia(QJsonObject media){
+ if(m_dragging){if(media.contains("positionMs"))m_dragReceipt.restart();for(auto it=media.begin();it!=media.end();++it)m_deferredMedia[it.key()]=it.value();return;}
  const auto oldLyricKey=lyricKey();
  const auto old=title()+"|"+artist()+"|"+album();const auto previousSession=m_media.value("sessionId");m_position=position();
  for(auto it=media.begin();it!=media.end();++it)m_media[it.key()]=it.value();
@@ -394,3 +397,5 @@ void Bridge::bindLyricCandidate(QString provider,QString sourceId){
 }
 void Bridge::clearLyricBinding(){const auto identity=lyricIdentity();m_settings.remove("lyrics/bindings/"+identity);QFile::remove(cachePath()+"/"+identity+".manual.lrc");QFile::remove(cachePath()+"/"+identity+".manual.json");fetchLyrics();}
 void Bridge::testLyricProvider(QString provider){if(provider=="phone"){if(m_online&&m_peerFeatures.contains("get_snapshot"))send("get_snapshot");emit lyricProvidersChanged();return;}if(m_lyricProviders)m_lyricProviders->test(provider);}
+
+void Bridge::setDragging(bool dragging){if(m_dragging==dragging)return;m_dragging=dragging;if(dragging){m_progress.stop();m_lyricClock.stop();}else{if(!m_deferredMedia.isEmpty()){auto latest=m_deferredMedia;m_deferredMedia={};if(m_dragReceipt.isValid()&&latest.contains("positionMs")&&latest.value("state").toString(m_media.value("state").toString())=="playing")latest["positionMs"]=latest.value("positionMs").toInteger()+qint64(m_dragReceipt.elapsed()*latest.value("speed").toDouble(m_media.value("speed").toDouble(1)));m_dragReceipt.invalidate();applyMedia(latest);}setUiVisible(m_uiVisible);emit progressChanged();updateLyricClock();}}

@@ -52,6 +52,7 @@ class Bridge : public QObject {
  Q_PROPERTY(QString ambientDeep READ ambientDeep NOTIFY changed)
  Q_PROPERTY(QVariantList lyricResults READ lyricResults NOTIFY lyricResultsChanged)
 public:
+ void setDragging(bool dragging);
  explicit Bridge(QObject *parent=nullptr);
  ~Bridge() override;
  QString status()const{return m_status;} bool online()const{return m_online;}
@@ -144,6 +145,7 @@ private:
  QPointer<QNetworkReply> m_lyricReply,m_lyricSearchReply;
  qint64 m_lyricRetryAfter=0;
  LyricProviders *m_lyricProviders=nullptr;QString m_lyricProvider;double m_lyricMatchScore=0;
+ QElapsedTimer m_dragReceipt;bool m_dragging=false;QJsonObject m_deferredMedia;
  QJsonObject m_media;QVariantList m_lyrics,m_devices;
  QVariantList m_lyricResults;
  QString m_artworkAccent="#9bc3c6";quint64 m_searchGeneration=0,m_lyricGeneration=0;

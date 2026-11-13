@@ -27,6 +27,10 @@ public:
   const auto metadata=QJsonObject{{"title","TEST ONLY lyric engine A"},{"artist","TEST fixture"},{"album","TEST"},{"durationMs",0},{"state","paused"}};
   bridge.applyMedia(metadata);const auto unknownDurationKey=bridge.m_lyricKey;
   bridge.applyMedia({{"durationMs",30000}});if(unknownDurationKey==bridge.m_lyricKey||bridge.m_lyricKey!=bridge.lyricKey())return 1;
+  const auto oldTitle=bridge.title();bridge.setDragging(true);bridge.applyMedia({{"title","TEST deferred drag title"},{"positionMs",1234}});bridge.applyMedia({{"volume",3},{"maxVolume",10}});
+  if(bridge.title()!=oldTitle||bridge.m_progress.isActive()||bridge.m_lyricClock.isActive())return 85;
+  bridge.setDragging(false);if(bridge.title()!="TEST deferred drag title"||bridge.volume()!=.3||!bridge.m_deferredMedia.isEmpty())return 86;
+  bridge.applyMedia(metadata);bridge.applyMedia({{"durationMs",30000}});
   static QJsonObject nativePayload;
   bridge.m_nativeUpdate=[](const char* json){nativePayload=QJsonDocument::fromJson(json).object();return 0;};
   auto artwork=[](QColor color){QImage image(12,12,QImage::Format_RGB32);image.fill(color);QByteArray bytes;QBuffer output(&bytes);output.open(QIODevice::WriteOnly);image.save(&output,"PNG");return QString::fromLatin1(bytes.toBase64());};
