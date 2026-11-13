@@ -284,6 +284,8 @@
         <source>Unavailable</source>
         <translation>不可用</translation>
     </message>
+    <message><source>Phone artwork</source><translation>手机封面</translation></message>
+    <message><source>%1 · %2×%3</source><translation>%1 · %2×%3</translation></message>
 </context>
 <context>
     <name>CoverArtwork</name>
@@ -2691,5 +2693,19 @@
         <source>Export diagnostics</source>
         <translation>导出诊断</translation>
     </message>
+    <message><source>Searching</source><translation>搜索中</translation></message>
+    <message><source>Downloading</source><translation>下载中</translation></message>
+    <message><source>Decoding</source><translation>解码中</translation></message>
+    <message><source>Timed out</source><translation>超时</translation></message>
+    <message><source>Not larger than phone artwork</source><translation>不优于手机封面</translation></message>
+    <message><source>Waiting for song metadata</source><translation>等待歌曲信息</translation></message>
+    <message><source>Cached</source><translation>缓存命中</translation></message>
+    <message><source>Experimental</source><translation>实验性</translation></message>
+    <message><source>No matching cover</source><translation>未匹配到封面</translation></message>
+</context>
+<context><name>CoverArt</name>
+    <message><source>Untrusted cover URL</source><translation>不受信任的封面地址</translation></message>
+    <message><source>Source cooling down</source><translation>来源处于冷却期</translation></message>
+    <message><source>Invalid cover image</source><translation>封面图片无效</translation></message>
 </context>
 </TS>

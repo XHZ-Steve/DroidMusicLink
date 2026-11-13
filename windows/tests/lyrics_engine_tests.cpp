@@ -112,6 +112,17 @@ public:
    cache.remove(bridge.lyricKey()+".lrc");
   }
   qInfo()<<"PASS: late duration invalidation, seek/backward clock, abort/stale HTTP reply, durable manual mapping and cache priority";
+  {
+   Bridge cover;cover.m_settings.setValue("preferences/cover/mode","high");
+   for(auto id:QStringList{"netease","qq","musicbrainz"})cover.m_settings.setValue("preferences/cover/providers/"+id+"/enabled",false);
+   cover.m_media={{"title","TEST deferred artwork"},{"artist","TEST artist"},{"durationMs",0}};
+   cover.enhanceCover();if(!cover.m_coverRequestKey.isEmpty())return 94;
+   cover.m_media["durationMs"]=200000;cover.enhanceCover();auto key=cover.m_coverRequestKey;if(key.isEmpty())return 95;
+   cover.m_phonePixels=QSize(363,363);cover.enhanceCover();if(cover.m_coverRequestKey==key)return 96;
+   cover.m_coverTestStates["netease"]={{"status","error"}};cover.m_coverRequestKey.clear();cover.enhanceCover();if(cover.m_coverRetry.isActive())return 97;
+   cover.m_media["durationMs"]=0;const auto artwork=cover.artwork();cover.testCoverProvider("qq");if(cover.m_coverTestStates["qq"].value("status")!="incomplete"||cover.artwork()!=artwork)return 98;
+  }
+  qInfo()<<"PASS: deferred cover metadata, late phone dimensions, and independent non-destructive cover diagnostics";
   return 0;
  }
 };

@@ -33,6 +33,14 @@ Item {
         property bool online: false
         property string lyricProvider: "lrclib"
         property string lastProviderTest: ""
+        property string coverSource:"Phone artwork · 363×363"
+        property string lastCoverTest:""
+        property var coverProviders:[
+            {id:"netease",name:"NetEase COVER TEST",status:"available",enabled:true,enabledKey:"cover/providers/netease/enabled",width:1400,height:1400,elapsedMs:550},
+            {id:"qq",name:"QQ COVER TEST",status:"empty",enabled:true,enabledKey:"cover/providers/qq/enabled"},
+            {id:"musicbrainz",name:"CAA COVER TEST",status:"unknown",enabled:true,enabledKey:"cover/providers/musicbrainz/enabled"}
+        ]
+        function testCoverProvider(id){lastCoverTest=id}
         property var lyricProviders: [
             {id:"lrclib",name:"LRCLIB TEST",capabilities:["search","line"],status:"unknown",enabled:true,enabledKey:"lyrics/providers/lrclib/enabled"},
             {id:"netease",name:"NetEase TEST",capabilities:["line","word","translation"],status:"available",enabled:true,enabledKey:"lyrics/providers/netease/enabled"}
@@ -180,6 +188,26 @@ Item {
             mouseRelease(grip,grip.width/2,grip.height/2+94,Qt.LeftButton)
             compare(controller.values["lyrics/providerPriority"],"netease,lrclib")
             compare(page.providerRows[0].id,"netease")
+        }
+        function test_cover_provider_test_toggle_and_drag(){
+            controller.setSetting("cover/source","netease,qq,musicbrainz")
+            page.navigate(2,0);waitForRendering(page)
+            const testButton=findChild(page,"cover-provider-test-netease")
+            const toggle=findChild(page,"cover-provider-enabled-netease")
+            verify(testButton);verify(toggle)
+            wait(200);page.revealItem(testButton);waitForRendering(page)
+            mouseClick(testButton,testButton.width/2,testButton.height/2)
+            compare(controller.lastCoverTest,"netease")
+            mouseClick(toggle,toggle.width/2,toggle.height/2)
+            compare(controller.values["cover/providers/netease/enabled"],false)
+            const grip=findChild(page,"cover-provider-drag-netease")
+            verify(grip)
+            mousePress(grip,grip.width/2,grip.height/2,Qt.LeftButton)
+            mouseMove(grip,grip.width/2,grip.height/2+20,30)
+            mouseMove(grip,grip.width/2,grip.height/2+75,30)
+            verify(grip.dragActive)
+            mouseRelease(grip,grip.width/2,grip.height/2+75,Qt.LeftButton)
+            compare(controller.values["cover/source"],"qq,netease,musicbrainz")
         }
     }
 }

@@ -14,6 +14,7 @@ struct CoverArtTrack {QString title,artist,album; qint64 duration=0;QString uri;
 struct CoverArtResult {QString path,release,source;QSize pixels;QByteArray digest;bool cached=false;QString thumbnailPath;CoverPalette palette;};
 class CoverArtProvider:public QObject {
 public:using Done=std::function<void(QByteArray,QString,bool)>;using QObject::QObject;
+ QString failure="empty",lastError;std::function<void(QString)> stage;
  virtual QString id()const=0;virtual void request(const CoverArtTrack &,int,Done)=0;virtual void cancel()=0;
 };
 class MusicBrainzCoverArtProvider final:public CoverArtProvider {
@@ -48,6 +49,7 @@ public:explicit CoverArtService(QString,QObject *parent=nullptr,QNetworkAccessMa
  ~CoverArtService()override{cancel();}
  void cancel();void clear();void setBudget(int mb);qint64 bytes()const;
  void setPriority(QStringList order);
+ std::function<void(QString,QVariantMap)> progress;
  void request(CoverArtTrack,int,bool,std::function<void(CoverArtResult)>,int minimum=0);
 };
 

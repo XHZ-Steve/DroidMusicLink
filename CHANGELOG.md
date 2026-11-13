@@ -2,6 +2,8 @@
 
 ## 1.1.0 preview
 
+- Preview3: draggable cover-provider order and independent real-fetch diagnostics; bounded source deadlines, cooldown fallback and transient retries; invalidate incomplete/late-image requests safely.
+
 - Preview2: experimental NetEase and QQ cover sources, configurable priority/enable switches, conservative catalogue matching, source-separated caches and automatic fallback.
 
 - Optional MusicBrainz/CAA high-resolution covers with conservative matching, asynchronous decode, bounded song/album cache, phone-only fallback and quality settings.

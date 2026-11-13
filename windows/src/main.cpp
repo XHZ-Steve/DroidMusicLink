@@ -79,6 +79,11 @@ QObject::connect(&app,&QCoreApplication::aboutToQuit,&backend,[&]{settings.setVa
  const int categoryIndex=arguments.indexOf("--category"),sectionIndex=arguments.indexOf("--settings-section");if(profileIndex>=0&&categoryIndex>=0&&categoryIndex+1<arguments.size())QMetaObject::invokeMethod(window,"openSettings",Q_ARG(QVariant,arguments[categoryIndex+1].toInt()),Q_ARG(QVariant,sectionIndex>=0&&sectionIndex+1<arguments.size()?arguments[sectionIndex+1].toInt():0));
  if(profileIndex>=0&&arguments.contains("--scroll-settings-end"))QTimer::singleShot(900,&app,[window]{if(auto view=window->findChild<QObject*>("settingsScroll")){auto item=view->property("contentItem").value<QQuickItem*>();if(item){const auto extent=item->property("contentHeight").toDouble()-item->height();item->setProperty("contentY",qMax(0.,extent));qInfo()<<"Settings scroll extent:"<<extent<<"position:"<<item->property("contentY");}}});
  QQuickWindow *captureWindow=window;int surfaceIndex=arguments.indexOf("--surface");if(surfaceIndex>=0&&surfaceIndex+1<arguments.size()){auto surface=window->findChild<QQuickWindow*>(arguments[surfaceIndex+1]);if(surface){window->hide();surface->show();surface->raise();captureWindow=surface;}}
+ const int coverProbeIndex=arguments.indexOf("--cover-provider-test");
+ if(profileIndex>=0&&coverProbeIndex>=0&&coverProbeIndex+1<arguments.size()){
+  QObject::connect(&backend,&Bridge::coverProvidersChanged,&app,[&backend]{qInfo().noquote()<<"Cover source diagnostics:"<<QJsonDocument::fromVariant(backend.coverProviders()).toJson(QJsonDocument::Compact);});
+  const auto source=arguments[coverProbeIndex+1];QTimer::singleShot(700,&app,[&backend,source]{backend.testCoverProvider(source);});
+ }
  if(arguments.contains("--diagnose-link")){
   QObject::connect(&backend,&Bridge::changed,&app,[&]{static QString status,code;if(status!=backend.status()){status=backend.status();qInfo().noquote()<<"Link state:"<<status;}if(code!=backend.pairingCode()){code=backend.pairingCode();if(!code.isEmpty())qInfo().noquote()<<"Pairing comparison:"<<code;}});
  }

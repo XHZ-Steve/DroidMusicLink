@@ -14,6 +14,7 @@
 #include <QtConcurrent>
 #include <QCoreApplication>
 #include <QDebug>
+#include <QElapsedTimer>
 #include <algorithm>
 namespace {
 QString hash(QString text){return QString::fromLatin1(QCryptographicHash::hash(text.toUtf8(),QCryptographicHash::Sha256).toHex());}
@@ -32,11 +33,11 @@ bool allowed(QUrl url){auto h=url.host().toLower();return url.scheme()=="https"&
 QString CoverArtTrack::key()const{return hash(normalized(title)+"\n"+normalized(artist)+"\n"+normalized(album)+"\n"+QString::number(duration/1000));}
 void MusicBrainzCoverArtProvider::cancel(){++generation;delay.stop();if(reply)reply->abort();reply=nullptr;}
 void MusicBrainzCoverArtProvider::get(QUrl url,bool json,std::function<void(QByteArray)> done){
- if(!allowed(url)){done({});return;}
+ if(!allowed(url)){failure="error";lastError=QCoreApplication::translate("CoverArt","Untrusted cover URL");done({});return;}if(stage)stage(json?"searching":"downloading");
  QNetworkRequest request(url);request.setRawHeader("User-Agent",("DroidMediaLink/"+QCoreApplication::applicationVersion()+" (https://github.com/XHZ-Steve/DroidMusicLink)").toUtf8());request.setRawHeader("Accept",json?"application/json":"image/*");request.setTransferTimeout(12000);request.setAttribute(QNetworkRequest::RedirectPolicyAttribute,QNetworkRequest::UserVerifiedRedirectPolicy);auto r=network->get(request);reply=r;QTimer::singleShot(15000,r,[r]{if(!r->isFinished())r->abort();});const auto token=generation;const qint64 limit=json?1024*1024:10*1024*1024;
  connect(r,&QNetworkReply::redirected,r,[r](QUrl target){if(allowed(target))r->redirectAllowed();else r->abort();});
  connect(r,&QNetworkReply::downloadProgress,r,[r,limit](qint64 n,qint64 total){if(n>limit||total>limit)r->abort();});
- connect(r,&QNetworkReply::finished,this,[this,r,token,limit,done]{auto data=r->isOpen()?r->read(limit+1):QByteArray{};if(r->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt()==429||r->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt()==503){bool ok=false;auto seconds=r->rawHeader("Retry-After").toLongLong(&ok);if(!ok){auto date=QDateTime::fromString(QString::fromLatin1(r->rawHeader("Retry-After")),Qt::RFC2822Date);seconds=date.isValid()?QDateTime::currentDateTimeUtc().secsTo(date):60;}nextRequest=qMax(nextRequest,QDateTime::currentMSecsSinceEpoch()+qBound<qint64>(60LL,seconds,86400LL)*1000);}const bool ok=r->error()==QNetworkReply::NoError&&r->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt()==200&&data.size()<=limit;r->deleteLater();if(reply==r)reply=nullptr;if(token==generation)done(ok?data:QByteArray{});});
+ connect(r,&QNetworkReply::finished,this,[this,r,token,limit,done]{auto data=r->isOpen()?r->read(limit+1):QByteArray{};if(r->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt()==429||r->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt()==503){bool ok=false;auto seconds=r->rawHeader("Retry-After").toLongLong(&ok);if(!ok){auto date=QDateTime::fromString(QString::fromLatin1(r->rawHeader("Retry-After")),Qt::RFC2822Date);seconds=date.isValid()?QDateTime::currentDateTimeUtc().secsTo(date):60;}nextRequest=qMax(nextRequest,QDateTime::currentMSecsSinceEpoch()+qBound<qint64>(60LL,seconds,86400LL)*1000);}const bool ok=r->error()==QNetworkReply::NoError&&r->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt()==200&&data.size()<=limit;r->deleteLater();if(reply==r)reply=nullptr;if(token==generation){if(!ok){failure=(r->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt()==429||r->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt()==503)?"rate-limited":r->error()==QNetworkReply::TimeoutError?"timeout":"error";lastError=r->errorString();}done(ok?data:QByteArray{});}});
 }
 QString MusicBrainzCoverArtProvider::selectRelease(const CoverArtTrack &track,const QJsonObject &response){
  // Do not guess an album from a title alone. Editions with conflicting version
@@ -57,7 +58,7 @@ QString MusicBrainzCoverArtProvider::selectRelease(const CoverArtTrack &track,co
  if(groups.size()!=1)return {};return groups.firstKey();
 }
 void MusicBrainzCoverArtProvider::request(const CoverArtTrack &track,int resolution,Done done){
- cancel();if(track.title.trimmed().isEmpty()||track.artist.trimmed().isEmpty()||track.album.trimmed().isEmpty()||track.duration<=0||track.title.size()>512||track.artist.size()>512||track.album.size()>512){done({},{},false);return;}const auto token=generation;const bool fresh=bypassCache;auto start=[this,track,resolution,done,token,fresh]{if(token!=generation)return;nextRequest=QDateTime::currentMSecsSinceEpoch()+1100;
+ cancel();failure="empty";lastError.clear();if(track.title.trimmed().isEmpty()||track.artist.trimmed().isEmpty()||track.album.trimmed().isEmpty()||track.duration<=0||track.title.size()>512||track.artist.size()>512||track.album.size()>512){failure="incomplete";done({},{},false);return;}const auto token=generation;const bool fresh=bypassCache;auto start=[this,track,resolution,done,token,fresh]{if(token!=generation)return;nextRequest=QDateTime::currentMSecsSinceEpoch()+1100;
   auto quote=[](QString text){text.replace('\\',"\\\\");text.replace('"',"\\\"");return '"'+text+'"';};
   QUrl url("https://musicbrainz.org/ws/2/recording");QUrlQuery query;query.addQueryItem("query","recording:"+quote(track.title)+" AND artist:"+quote(track.artist.section('/',0,0))+" AND release:"+quote(track.album));query.addQueryItem("fmt","json");query.addQueryItem("limit","25");url.setQuery(query);
   get(url,true,[this,track,resolution,done,fresh](QByteArray data){auto id=selectRelease(track,QJsonDocument::fromJson(data).object());if(id.isEmpty()){done({},{},false);return;}if(!fresh&&cachedImage&&cachedImage(id,resolution)){done({},id,true);return;}
@@ -67,7 +68,7 @@ void MusicBrainzCoverArtProvider::request(const CoverArtTrack &track,int resolut
    get(QUrl("https://coverartarchive.org/release-group/"+id+"/front"+suffix),false,[done,id](QByteArray image){done(image,id,false);});
   });
  };
- const auto wait=qMax<qint64>(0,nextRequest-QDateTime::currentMSecsSinceEpoch());if(wait){delay.setSingleShot(true);disconnect(&delay,nullptr,this,nullptr);connect(&delay,&QTimer::timeout,this,start);delay.start(int(wait));}else start();
+ const auto wait=qMax<qint64>(0,nextRequest-QDateTime::currentMSecsSinceEpoch());if(wait>1500){failure="rate-limited";lastError=QCoreApplication::translate("CoverArt","Source cooling down");done({},{},false);return;}if(wait){delay.setSingleShot(true);disconnect(&delay,nullptr,this,nullptr);connect(&delay,&QTimer::timeout,this,start);delay.start(int(wait));}else start();
 }
 CoverArtService::CoverArtService(QString path,QObject *parent,QNetworkAccessManager *transport):QObject(parent),provider(this,transport),netease("netease",this,transport),qq("qq",this,transport),directory(path){QDir().mkpath(directory);auto exists=[this](QString id,int size){QFileInfo file(directory+"/"+hash(id+QString::number(size))+".png");return file.isFile()&&file.size()<=32*1024*1024;};provider.cachedImage=exists;netease.cachedImage=exists;qq.cachedImage=exists;}
 void CoverArtService::cancel(){++generation;epoch->store(generation);provider.cancel();netease.cancel();qq.cancel();}
@@ -92,10 +93,10 @@ void CoverArtService::decode(QByteArray data,const QString &key,QString release,
 }
 void CoverArtService::request(CoverArtTrack track,int resolution,bool refresh,std::function<void(CoverArtResult)> done,int minimum){
  minimumPixels=qMax(0,minimum);
- cancel();for(auto it=failures.begin();it!=failures.end();)if(it.value()<=QDateTime::currentMSecsSinceEpoch())it=failures.erase(it);else ++it;const auto token=generation;const auto key=track.key()+"-"+QString::number(resolution)+"-"+hash(priority.join(','));const auto mapping=directory+"/"+key+".json";
+ cancel();for(auto it=failures.begin();it!=failures.end();)if(it.value()<=QDateTime::currentMSecsSinceEpoch())it=failures.erase(it);else ++it;const auto token=generation;const auto key=track.key()+"-"+QString::number(resolution)+"-"+hash(priority.join(','))+"-"+QString::number(minimumPixels);const auto mapping=directory+"/"+key+".json";
  auto fetch=[this,track,resolution,key,mapping,done,token,refresh]{fetchAt(track,resolution,key,mapping,refresh,priority,0,done,token);};
  if(refresh){QFile::remove(mapping);failures.remove(key);}
- QFile file(mapping);if(!refresh&&file.open(QIODevice::ReadOnly)&&file.size()<16384){auto info=QJsonDocument::fromJson(file.readAll()).object();auto id=info["release"].toString();const auto age=QDateTime::currentMSecsSinceEpoch()-info["created"].toInteger();if(validCoverId(id)&&priority.contains(coverSource(id))&&age>=0&&age<30LL*86400000){QFileInfo image(directory+"/"+hash(id+QString::number(resolution))+".png");if(image.isFile()&&image.size()<=32*1024*1024){decode({},key,id,resolution,true,[this,id,resolution,fetch,done](CoverArtResult result){if(result.path.isEmpty()){QFile::remove(directory+"/"+hash(id+QString::number(resolution))+".png");fetch();}else if(qMin(result.pixels.width(),result.pixels.height())<=minimumPixels)fetch();else done(result);});return;}}}
+ QFile file(mapping);if(!refresh&&file.open(QIODevice::ReadOnly)&&file.size()<16384){auto info=QJsonDocument::fromJson(file.readAll()).object();auto id=info["release"].toString();const auto age=QDateTime::currentMSecsSinceEpoch()-info["created"].toInteger();if(validCoverId(id)&&priority.contains(coverSource(id))&&age>=0&&age<30LL*86400000){QFileInfo image(directory+"/"+hash(id+QString::number(resolution))+".png");if(image.isFile()&&image.size()<=32*1024*1024){decode({},key,id,resolution,true,[this,id,resolution,fetch,done](CoverArtResult result){if(result.path.isEmpty()){QFile::remove(directory+"/"+hash(id+QString::number(resolution))+".png");fetch();}else if(qMin(result.pixels.width(),result.pixels.height())<=minimumPixels)fetch();else {if(progress)progress(result.source,{{"status","available"},{"width",result.pixels.width()},{"height",result.pixels.height()},{"elapsedMs",0},{"cached",true}});done(result);}});return;}}}
  fetch();
 }
 void CoverArtService::fetchAt(CoverArtTrack track,int resolution,QString key,QString mapping,bool refresh,QStringList order,int index,std::function<void(CoverArtResult)> done,quint64 token){
@@ -104,8 +105,19 @@ void CoverArtService::fetchAt(CoverArtTrack track,int resolution,QString key,QSt
  const auto source=order[index];CoverArtProvider *selected=&provider;
  if(source=="netease"){selected=&netease;netease.bypassCache=refresh;}else if(source=="qq"){selected=&qq;qq.bypassCache=refresh;}else provider.bypassCache=refresh;
  auto next=[this,track,resolution,key,mapping,refresh,order,index,done,token]{fetchAt(track,resolution,key,mapping,refresh,order,index+1,done,token);};
- selected->request(track,resolution,[this,key,mapping,resolution,done,token,next](QByteArray image,QString release,bool cached){if(token!=generation)return;if((image.isEmpty()&&!cached)||!validCoverId(release)){next();return;}
-  decode(image,key,release,resolution,cached,[this,mapping,done,next](CoverArtResult result){if(result.path.isEmpty()||qMin(result.pixels.width(),result.pixels.height())<=minimumPixels){next();return;}QSaveFile file(mapping);if(file.open(QIODevice::WriteOnly)){file.write(QJsonDocument(QJsonObject{{"release",result.release},{"created",QDateTime::currentMSecsSinceEpoch()}}).toJson());file.commit();}trim();done(result);});
+ auto finished=std::make_shared<bool>(false);QElapsedTimer clock;clock.start();
+ auto report=[this,source,clock](QString status,QString error={},QSize pixels={},bool cached=false){if(progress)progress(source,{{"status",status},{"lastError",error},{"width",pixels.width()},{"height",pixels.height()},{"elapsedMs",clock.elapsed()},{"cached",cached}});};
+ selected->stage=[this,token,finished,report](QString status){if(token==generation&&!*finished)report(status);};report("searching");
+ QTimer::singleShot(12000,this,[this,token,finished,selected,report,next]{if(token!=generation||*finished)return;*finished=true;selected->cancel();report("timeout");next();});
+ selected->request(track,resolution,[this,key,mapping,resolution,done,token,next,selected,finished,report](QByteArray image,QString release,bool cached){
+  if(token!=generation||*finished)return;*finished=true;
+  if((image.isEmpty()&&!cached)||!validCoverId(release)){report(selected->failure,selected->lastError);next();return;}
+  report("decoding");
+  decode(image,key,release,resolution,cached,[this,mapping,done,next,report](CoverArtResult result){
+   if(result.path.isEmpty()){report("error",QCoreApplication::translate("CoverArt","Invalid cover image"));next();return;}
+   if(qMin(result.pixels.width(),result.pixels.height())<=minimumPixels){report("small",{},result.pixels,result.cached);next();return;}
+   QSaveFile file(mapping);if(file.open(QIODevice::WriteOnly)){file.write(QJsonDocument(QJsonObject{{"release",result.release},{"created",QDateTime::currentMSecsSinceEpoch()}}).toJson());file.commit();}trim();report("available",{},result.pixels,result.cached);done(result);
+  });
  });
 }
 
@@ -116,9 +128,9 @@ bool CatalogCoverArtProvider::trusted(QString source,QUrl url,bool image){
 }
 void CatalogCoverArtProvider::cancel(){++generation;delay.stop();if(reply)reply->abort();reply=nullptr;}
 void CatalogCoverArtProvider::get(QUrl url,bool json,std::function<void(QByteArray)> done){
- if(!trusted(source,url,!json)){done({});return;}const auto token=generation;QNetworkRequest req(url);req.setRawHeader("User-Agent",("DroidMediaLink/"+QCoreApplication::applicationVersion()+" (https://github.com/XHZ-Steve/DroidMusicLink)").toUtf8());req.setRawHeader("Referer",source=="netease"?"https://music.163.com/":"https://y.qq.com/");req.setTransferTimeout(10000);req.setAttribute(QNetworkRequest::RedirectPolicyAttribute,QNetworkRequest::UserVerifiedRedirectPolicy);
+ if(!trusted(source,url,!json)){failure="error";lastError=QCoreApplication::translate("CoverArt","Untrusted cover URL");done({});return;}if(stage)stage(json?"searching":"downloading");const auto token=generation;QNetworkRequest req(url);req.setRawHeader("User-Agent",("DroidMediaLink/"+QCoreApplication::applicationVersion()+" (https://github.com/XHZ-Steve/DroidMusicLink)").toUtf8());req.setRawHeader("Referer",source=="netease"?"https://music.163.com/":"https://y.qq.com/");req.setTransferTimeout(15000);req.setAttribute(QNetworkRequest::RedirectPolicyAttribute,QNetworkRequest::UserVerifiedRedirectPolicy);
  auto r=network->get(req);reply=r;const qint64 limit=(json?1:10)*1024*1024;QTimer::singleShot(15000,r,[r]{if(!r->isFinished())r->abort();});connect(r,&QNetworkReply::redirected,r,[r,s=source,json](QUrl url){if(trusted(s,url,!json))r->redirectAllowed();else r->abort();});connect(r,&QNetworkReply::downloadProgress,r,[r,limit](qint64 n,qint64 total){if(n>limit||total>limit)r->abort();});
- connect(r,&QNetworkReply::finished,this,[this,r,token,limit,done]{const auto code=r->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();auto bytes=r->isOpen()?r->read(limit+1):QByteArray{};const bool ok=r->error()==QNetworkReply::NoError&&code==200&&bytes.size()<=limit;r->deleteLater();if(reply==r)reply=nullptr;if(token!=generation)return;if(code==429||code==503){bool parsed=false;auto seconds=r->rawHeader("Retry-After").toLongLong(&parsed);nextRequest=QDateTime::currentMSecsSinceEpoch()+qBound<qint64>(60LL,parsed?seconds:60LL,86400LL)*1000;}done(ok?bytes:QByteArray{});});
+ connect(r,&QNetworkReply::finished,this,[this,r,token,limit,done]{const auto code=r->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();auto bytes=r->isOpen()?r->read(limit+1):QByteArray{};const bool ok=r->error()==QNetworkReply::NoError&&code==200&&bytes.size()<=limit;r->deleteLater();if(reply==r)reply=nullptr;if(token!=generation)return;if(code==429||code==503){bool parsed=false;auto seconds=r->rawHeader("Retry-After").toLongLong(&parsed);nextRequest=QDateTime::currentMSecsSinceEpoch()+qBound<qint64>(60LL,parsed?seconds:60LL,86400LL)*1000;}if(!ok){failure=(code==429||code==503)?"rate-limited":r->error()==QNetworkReply::TimeoutError?"timeout":"error";lastError=r->errorString();}done(ok?bytes:QByteArray{});});
 }
 QJsonObject CatalogCoverArtProvider::selectCandidate(QString source,const CoverArtTrack &track,const QJsonArray &rows){
  QMap<QString,QJsonObject> albums;
@@ -129,7 +141,7 @@ QJsonObject CatalogCoverArtProvider::selectCandidate(QString source,const CoverA
  }return albums.size()==1?albums.first():QJsonObject{};
 }
 void CatalogCoverArtProvider::request(const CoverArtTrack &track,int resolution,Done done){
- cancel();if(track.title.isEmpty()||track.artist.isEmpty()||track.duration<=0||track.title.size()>512||track.artist.size()>512||track.album.size()>512){done({},{},false);return;}const auto token=generation;const bool refresh=bypassCache;
+ cancel();failure="empty";lastError.clear();if(track.title.isEmpty()||track.artist.isEmpty()||track.duration<=0||track.title.size()>512||track.artist.size()>512||track.album.size()>512){failure="incomplete";done({},{},false);return;}const auto token=generation;const bool refresh=bypassCache;
  auto start=[this,track,resolution,done,token,refresh]{if(token!=generation)return;nextRequest=QDateTime::currentMSecsSinceEpoch()+1100;const auto term=(track.title+" "+track.artist.section('/',0,0)).left(240);
   auto url=source=="netease"?queryUrl("https://music.163.com/api/search/get/web",{{"s",term},{"type","1"},{"offset","0"},{"limit","25"}}):queryUrl("https://c.y.qq.com/soso/fcgi-bin/client_search_cp",{{"w",term},{"p","1"},{"n","25"},{"cr","1"},{"format","json"},{"inCharset","utf8"},{"outCharset","utf-8"}});
   get(url,true,[this,track,resolution,done,refresh](QByteArray bytes){auto object=QJsonDocument::fromJson(bytes).object();const auto rows=source=="netease"?object.value("result").toObject().value("songs").toArray():object.value("data").toObject().value("song").toObject().value("list").toArray();auto row=selectCandidate(source,track,rows);if(row.isEmpty()){done({},{},false);return;}
@@ -137,7 +149,7 @@ void CatalogCoverArtProvider::request(const CoverArtTrack &track,int resolution,
    if(source=="qq"){auto url=QUrl("https://y.gtimg.cn/music/photo_new/T002R800x800M000"+row.value("albummid").toString()+".jpg");get(url,false,[done,id](QByteArray image){done(image,id,false);});return;}
    const auto songId=QString::number(row.value("id").toInteger());get(queryUrl("https://music.163.com/api/song/detail/",{{"id",songId},{"ids","["+songId+"]"}}),true,[this,track,done,id,songId](QByteArray detail){auto songs=QJsonDocument::fromJson(detail).object().value("songs").toArray();auto verified=selectCandidate("netease",track,songs);if(QString::number(verified.value("id").toInteger())!=songId||"netease:"+QString::number(verified.value("album").toObject().value("id").toInteger())!=id){done({},{},false);return;}auto url=QUrl(verified.value("album").toObject().value("picUrl").toString());if(url.scheme()=="http")url.setScheme("https");get(url,false,[done,id](QByteArray image){done(image,id,false);});});
   });
- };const auto wait=qMax<qint64>(0,nextRequest-QDateTime::currentMSecsSinceEpoch());if(wait){delay.setSingleShot(true);disconnect(&delay,nullptr,this,nullptr);connect(&delay,&QTimer::timeout,this,start);delay.start(int(wait));}else start();
+ };const auto wait=qMax<qint64>(0,nextRequest-QDateTime::currentMSecsSinceEpoch());if(wait>1500){failure="rate-limited";lastError=QCoreApplication::translate("CoverArt","Source cooling down");done({},{},false);return;}if(wait){delay.setSingleShot(true);disconnect(&delay,nullptr,this,nullptr);connect(&delay,&QTimer::timeout,this,start);delay.start(int(wait));}else start();
 }
 
 bool PublishedCoverArtProvider::trusted(QUrl url){

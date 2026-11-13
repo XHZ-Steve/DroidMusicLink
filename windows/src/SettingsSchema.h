@@ -37,13 +37,7 @@ inline QVariantList descriptors(){
  S("cover/mode","Cover quality",2,0,"enum","off",0,1,1,QVariantList{QVariantMap{{"label",QCoreApplication::translate("Settings","Off")},{"value","off"}},QVariantMap{{"label",QCoreApplication::translate("Settings","Automatic enhancement")},{"value","auto"}},QVariantMap{{"label",QCoreApplication::translate("Settings","Prefer high resolution")},{"value","high"}}},false,QCoreApplication::translate("Settings","Online enhancement sends song, artist and album metadata to the enabled cover sources. Experimental sources may become unavailable. Cover images retain their owners' copyrights."));
  S("cover/phoneOnly","Use phone artwork only",2,0,"bool",false);
  S("cover/resolution","Target cover resolution",2,0,"enum",1200,0,1,1,QVariantList{QVariantMap{{"label","500 px"},{"value",500}},QVariantMap{{"label","1200 px"},{"value",1200}},QVariantMap{{"label","2048 px"},{"value",2048}}});
- S("cover/source","Cover source priority",2,0,"enum","netease,qq,musicbrainz",0,1,1,QVariantList{
-  QVariantMap{{"label",QCoreApplication::translate("Settings","NetEase → QQ → CAA")},{"value","netease,qq,musicbrainz"}},
-  QVariantMap{{"label",QCoreApplication::translate("Settings","NetEase → CAA → QQ")},{"value","netease,musicbrainz,qq"}},
-  QVariantMap{{"label",QCoreApplication::translate("Settings","QQ → NetEase → CAA")},{"value","qq,netease,musicbrainz"}},
-  QVariantMap{{"label",QCoreApplication::translate("Settings","QQ → CAA → NetEase")},{"value","qq,musicbrainz,netease"}},
-  QVariantMap{{"label",QCoreApplication::translate("Settings","CAA → NetEase → QQ")},{"value","musicbrainz,netease,qq"}},
-  QVariantMap{{"label",QCoreApplication::translate("Settings","CAA → QQ → NetEase")},{"value","musicbrainz,qq,netease"}}});
+ S("cover/source","Cover source priority",2,0,"coverOrder","netease,qq,musicbrainz");
  S("cover/providers/netease/enabled","NetEase covers (experimental)",2,0,"bool",true);
  S("cover/providers/qq/enabled","QQ Music covers (experimental)",2,0,"bool",true);
  S("cover/providers/musicbrainz/enabled","MusicBrainz / CAA covers",2,0,"bool",true);
@@ -113,6 +107,7 @@ inline bool normalize(const QString &key,const QVariant &input,QVariant *output)
  else if(type=="int"||type=="number"){bool ok=false;double number=input.toDouble(&ok);if(!ok||!std::isfinite(number))return false;number=qBound(row["min"].toDouble(),number,row["max"].toDouble());result=type=="int"?QVariant(qRound(number)):QVariant(number);}
  else if(type=="color"){if(input.toString()=="auto"&&row.value("defaultValue").toString()=="auto"){if(output)*output="auto";return true;}QColor color(input.toString());if(!color.isValid())return false;result=color.name(QColor::HexArgb);}
  else if(type=="shortcut"){auto keys=QKeySequence::fromString(input.toString(),QKeySequence::PortableText);if(keys.isEmpty()||keys.count()>2)return false;result=keys.toString(QKeySequence::PortableText);}
+ else if(type=="coverOrder"){auto ids=input.toString().split(',',Qt::SkipEmptyParts);if(ids.size()!=3||QSet<QString>(ids.begin(),ids.end())!=QSet<QString>{"netease","qq","musicbrainz"})return false;result=ids.join(',');}
  else if(type=="providerOrder"){auto ids=input.toString().split(',',Qt::SkipEmptyParts);if(ids.size()==4&&QSet<QString>(ids.begin(),ids.end())==QSet<QString>{"netease","qq","kugou","lrclib"})ids.prepend("phone");if(ids.size()!=5||QSet<QString>(ids.begin(),ids.end())!=QSet<QString>{"phone","netease","qq","kugou","lrclib"})return false;result=ids.join(',');}
  else if(type=="enum"){bool found=false;for(const auto &option:row["options"].toList())if(option.toMap()["value"].toString()==input.toString()){found=true;result=option.toMap()["value"];}if(!found)return false;}
  else return false;

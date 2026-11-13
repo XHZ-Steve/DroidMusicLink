@@ -11,6 +11,7 @@
 #include <QLibrary>
 #include <QPointer>
 #include <QSet>
+#include <QTemporaryDir>
 #include "CoverPalette.h"
 #include "CoverArtProvider.h"
 #include "LyricProviders.h"
@@ -41,6 +42,8 @@ class Bridge : public QObject {
  Q_PROPERTY(QString lyricProvider READ lyricProvider NOTIFY lyricsChanged)
  Q_PROPERTY(double lyricMatchScore READ lyricMatchScore NOTIFY lyricsChanged)
  Q_PROPERTY(QVariantList lyricProviders READ lyricProviders NOTIFY lyricProvidersChanged)
+ Q_PROPERTY(QVariantList coverProviders READ coverProviders NOTIFY coverProvidersChanged)
+ Q_PROPERTY(QString coverSource READ coverSource NOTIFY coverProvidersChanged)
  Q_PROPERTY(QVariantList lyricPresets READ lyricPresets NOTIFY settingsChanged)
  Q_PROPERTY(QVariantList devices READ devices NOTIFY changed)
  Q_PROPERTY(QVariantList settingsCatalog READ settingsCatalog CONSTANT)
@@ -120,6 +123,8 @@ public:
  Q_INVOKABLE void bindLyricCandidate(QString provider,QString sourceId);
  Q_INVOKABLE void clearLyricBinding();
  Q_INVOKABLE void testLyricProvider(QString provider);
+ Q_INVOKABLE void testCoverProvider(QString provider);
+ QVariantList coverProviders()const;QString coverSource()const;
  Q_INVOKABLE void clearLyricsCache();
  Q_INVOKABLE void forgetDevice(QString url);
  Q_INVOKABLE void checkUpdates();
@@ -135,6 +140,7 @@ signals:
  void lyricResultsChanged();
  void lyricLineChanged();void lyricProgressChanged();
  void lyricProvidersChanged();
+ void coverProvidersChanged();
  void commandFinished(QString requestId,bool success,QString error);
  void notification(QString message); void updateAvailable(QString version,QString url);
 private:
@@ -145,6 +151,7 @@ private:
  PublishedCoverArtProvider *m_publishedCover=nullptr;QTimer m_publishedCoverDelay;QString m_publishedCoverKey;quint64 m_publishedCoverGeneration=0;int m_publishedCoverAttempts=0;bool m_fromPublishedCover=false,m_publishedCoverActive=false;QByteArray m_receivedArtworkDigest;
  void enhanceCover(bool refresh=false);void applyEnhancedCover(CoverArtResult result);
  CoverArtService *m_coverService=nullptr;QString m_coverRequestKey,m_phoneArtwork,m_nativeArtwork,m_phoneNativeArtwork;QByteArray m_phoneArtworkDigest;QSize m_phonePixels,m_enhancedPixels;CoverArtResult m_pendingCover;
+ QTemporaryDir m_coverTestDirectory;CoverArtService *m_coverTestService=nullptr;QHash<QString,QVariantMap> m_coverStates,m_coverTestStates;QString m_coverSource,m_coverRetryKey;QTimer m_coverRetry;int m_coverAttempts=0;
  QTimer m_artworkRetry;int m_artworkRetryAttempts=0;
  QTimer m_lyricClock;bool m_uiVisible=true,m_lyricsLoading=false;int m_currentLyricLine=-1;
  QSet<QString> m_lyricSurfaces,m_peerFeatures;

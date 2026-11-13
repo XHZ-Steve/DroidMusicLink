@@ -80,6 +80,12 @@ Item {
         if(order.indexOf("phone")<0)order.unshift("phone")
         return sources.sort(function(a,b){const ai=order.indexOf(a.id),bi=order.indexOf(b.id);return (ai<0?100:ai)-(bi<0?100:bi)})
     }
+    readonly property var coverProviderRows: {
+        settingsRevision
+        const sources=controller&&controller.coverProviders?controller.coverProviders.slice():[]
+        const order=String(value("cover/source","netease,qq,musicbrainz")).split(",")
+        return sources.sort(function(a,b){return order.indexOf(a.id)-order.indexOf(b.id)})
+    }
     readonly property var lyricPresetRows: {settingsRevision;return controller&&controller.lyricPresets?controller.lyricPresets.map(function(row){return {label:row.label||row.name,value:row.name,builtIn:row.builtIn}}):[]}
     readonly property string effectivePresetName: lyricPresetRows.some(function(row){return row.value===selectedPresetName})?selectedPresetName:lyricPresetRows.length?lyricPresetRows[0].value:""
     readonly property bool selectedPresetBuiltIn: {for(let i=0;i<lyricPresetRows.length;i++)if(lyricPresetRows[i].value===effectivePresetName)return lyricPresetRows[i].builtIn;return true}
@@ -132,7 +138,7 @@ Item {
     function expandAdvanced(){setAdvanced(activeGroup,activeSection,true)}
     function toggleAdvanced(){setAdvanced(activeGroup,activeSection,!advancedExpanded)}
     function rowsFor(group,section){
-        return catalog.filter(function(row){return row.group===group&&row.section===section&&(!row.advanced||advancedFor(group,section))&&row.key!=="lyrics/providerPriority"&&!(String(row.key).indexOf("lyrics/providers/")===0&&String(row.key).endsWith("/enabled"))})
+        return catalog.filter(function(row){return row.group===group&&row.section===section&&(!row.advanced||advancedFor(group,section))&&row.key!=="lyrics/providerPriority"&&row.key!=="cover/source"&&!(String(row.key).indexOf("cover/providers/")===0&&String(row.key).endsWith("/enabled"))&&!(String(row.key).indexOf("lyrics/providers/")===0&&String(row.key).endsWith("/enabled"))})
     }
     function subgroupsFor(group,section){
         const keys=[];catalog.forEach(function(row){if(row.group===group&&row.section===section&&row.subgroup&&keys.indexOf(row.subgroup)<0)keys.push(row.subgroup)})
@@ -173,23 +179,24 @@ Item {
     function scrollToKey(key){
         const container=findNamed(contentColumn,"section-"+activeGroup+"/"+activeSection)||contentColumn
         let target=String(key).indexOf("@")===0?container:findNamed(container,"setting-"+key)
+        if(key==="cover/source"||String(key).indexOf("cover/providers/")===0)target=findNamed(container,"coverProviderList")
         if(key==="lyrics/providerPriority")target=findNamed(container,"lyricProviderList")
         if(!target&&String(key).indexOf("lyrics/providers/")===0)target=findNamed(container,"provider-enabled-"+String(key).split("/")[2])
         revealItem(target);if(target)target.forceActiveFocus()
     }
     function resetSection(group,section,scope){pendingReset=group===4&&(section===1||section===2)?{kind:"appearance",scope:scope}:{kind:"section",group:group,section:section};resetDialog.open()}
     function resetCurrent(){resetSection(activeGroup,activeSection,appearanceScope)}
-    function moveProvider(from,to){
-        const rows=providerRows.slice();to=Math.max(0,Math.min(rows.length-1,to))
+    function moveProvider(from,to,covers){
+        const rows=(covers?coverProviderRows:providerRows).slice();to=Math.max(0,Math.min(rows.length-1,to))
         if(from<0||from>=rows.length||from===to)return
         const moved=rows.splice(from,1)[0];rows.splice(to,0,moved)
-        save("lyrics/providerPriority",rows.map(function(row){return row.id}).join(","))
+        save(covers?"cover/source":"lyrics/providerPriority",rows.map(function(row){return row.id}).join(","))
     }
     function providerCapabilities(capabilities){
         const labels={search:qsTr("Search"),line:qsTr("Line timing"),word:qsTr("Word timing"),translation:qsTr("Translation"),romanization:qsTr("Romanization")}
         return (capabilities||[]).map(function(key){return labels[key]||key}).join(" · ")
     }
-    function providerStatus(status){const labels={unknown:"",testing:qsTr("Testing"),available:qsTr("Available"),empty:qsTr("No lyrics"),error:qsTr("Unavailable"),"rate-limited":qsTr("Rate limited")};return labels[status]===undefined?status:labels[status]}
+    function providerStatus(status){const labels={unknown:"",testing:qsTr("Testing"),available:qsTr("Available"),empty:qsTr("No lyrics"),error:qsTr("Unavailable"),"rate-limited":qsTr("Rate limited"),searching:qsTr("Searching"),downloading:qsTr("Downloading"),decoding:qsTr("Decoding"),timeout:qsTr("Timed out"),small:qsTr("Not larger than phone artwork"),incomplete:qsTr("Waiting for song metadata")};return labels[status]===undefined?status:labels[status]}
     function providerName(id){for(let i=0;i<providerRows.length;i++)if(providerRows[i].id===id)return providerRows[i].name;return id==="local"?qsTr("Local lyrics"):id==="phone"?qsTr("Phone lyrics"):id||qsTr("None")}
     function validPresetName(input,oldName){const name=String(input).trim();return name.length>0&&name.length<=64&&!/[\x00-\x1f\\/]/.test(name)&&!lyricPresetRows.some(function(row){return row.value===name&&row.value!==oldName})}
     function editPresetName(action){presetNameAction=action;presetRenameFrom=action==="rename"?effectivePresetName:"";presetNameDialog.open()}
@@ -365,16 +372,28 @@ Item {
     }
 
     component ProviderPanel: ColumnLayout {
+        id:providerPanel
+        property bool covers:false
         spacing:6
+        function busy(status){return ["testing","searching","downloading","decoding"].indexOf(status)>=0}
+        function detail(row){
+            if(!covers)return page.providerCapabilities(row.capabilities)
+            const parts=[]
+            if(row.width>0&&row.height>0)parts.push(row.width+"×"+row.height)
+            if(row.elapsedMs!==undefined)parts.push(row.elapsedMs+" ms")
+            if(row.cached)parts.push(qsTr("Cached"))
+            if(row.experimental)parts.push(qsTr("Experimental"))
+            return parts.join(" · ")
+        }
         RowLayout {
             Layout.fillWidth:true
             Label{text:qsTr("Current source");color:tokens.secondaryText;font.pixelSize:tokens.caption}
-            Label{Layout.fillWidth:true;text:page.providerName(page.controller&&page.controller.lyricProvider?page.controller.lyricProvider:"");textFormat:Text.PlainText;color:page.textColor;elide:Text.ElideRight}
-            FlatButton{text:qsTr("Choose lyrics");frosted:true;onClicked:page.matchLyricsRequested()}
+            Label{Layout.fillWidth:true;text:providerPanel.covers?(page.controller&&page.controller.coverSource||""):page.providerName(page.controller&&page.controller.lyricProvider?page.controller.lyricProvider:"");textFormat:Text.PlainText;color:page.textColor;elide:Text.ElideRight}
+            FlatButton{visible:!providerPanel.covers;text:qsTr("Choose lyrics");frosted:true;onClicked:page.matchLyricsRequested()}
         }
         ListView {
-            id:providerList;objectName:"lyricProviderList";Layout.fillWidth:true;Layout.preferredHeight:count*56
-            interactive:false;clip:false;model:page.providerRows
+            id:providerList;objectName:providerPanel.covers?"coverProviderList":"lyricProviderList";Layout.fillWidth:true;Layout.preferredHeight:count*56
+            interactive:false;clip:false;model:providerPanel.covers?page.coverProviderRows:page.providerRows
             delegate:Item {
                 id:providerRow;required property int index;required property var modelData
                 width:providerList.width;height:56;z:providerDrag.active?10:0
@@ -386,7 +405,7 @@ Item {
                     RowLayout {
                         anchors.fill:parent;spacing:8
                         Item {
-                            id:grip;objectName:"provider-drag-"+providerRow.modelData.id;Layout.preferredWidth:30;Layout.fillHeight:true;activeFocusOnTab:true
+                            id:grip;objectName:(providerPanel.covers?"cover-provider-drag-":"provider-drag-")+providerRow.modelData.id;Layout.preferredWidth:30;Layout.fillHeight:true;activeFocusOnTab:true
                             readonly property bool dragActive:providerDrag.active
                             readonly property real dragOffset:providerDrag.activeTranslation.y
                             property real pendingDragOffset:0
@@ -396,19 +415,19 @@ Item {
                             DragHandler {
                                 id:providerDrag;target:null;xAxis.enabled:false;yAxis.enabled:true
                                 onActiveTranslationChanged:if(providerDrag.active)grip.pendingDragOffset=providerDrag.activeTranslation.y
-                                onActiveChanged:{if(providerDrag.active)grip.pendingDragOffset=0;else page.moveProvider(providerRow.index,providerRow.index+Math.round(grip.pendingDragOffset/providerRow.height))}
+                                onActiveChanged:{if(providerDrag.active)grip.pendingDragOffset=0;else page.moveProvider(providerRow.index,providerRow.index+Math.round(grip.pendingDragOffset/providerRow.height),providerPanel.covers)}
                             }
-                            Keys.onUpPressed:function(event){page.moveProvider(providerRow.index,providerRow.index-1);event.accepted=true}
-                            Keys.onDownPressed:function(event){page.moveProvider(providerRow.index,providerRow.index+1);event.accepted=true}
+                            Keys.onUpPressed:function(event){page.moveProvider(providerRow.index,providerRow.index-1,providerPanel.covers);event.accepted=true}
+                            Keys.onDownPressed:function(event){page.moveProvider(providerRow.index,providerRow.index+1,providerPanel.covers);event.accepted=true}
                         }
                         ColumnLayout {
                             Layout.fillWidth:true;spacing:4
                             Label{Layout.fillWidth:true;text:providerRow.modelData.name;textFormat:Text.PlainText;color:page.textColor;font.weight:Font.Medium;elide:Text.ElideRight}
-                            Label{Layout.fillWidth:true;text:page.providerCapabilities(providerRow.modelData.capabilities);textFormat:Text.PlainText;color:tokens.secondaryText;font.pixelSize:tokens.caption;elide:Text.ElideRight}
+                            Label{Layout.fillWidth:true;text:providerPanel.detail(providerRow.modelData);textFormat:Text.PlainText;color:tokens.secondaryText;font.pixelSize:tokens.caption;elide:Text.ElideRight}
                         }
-                        Label{visible:!!text;text:page.providerStatus(providerRow.modelData.status||"unknown");color:providerRow.modelData.status==="available"?tokens.success:providerRow.modelData.status==="error"?tokens.danger:tokens.secondaryText;font.pixelSize:tokens.caption}
-                        FlatButton{objectName:"provider-test-"+providerRow.modelData.id;text:qsTr("Test");enabled:providerRow.modelData.status!=="testing";Accessible.name:qsTr("Test %1").arg(providerRow.modelData.name);ToolTip.visible:hovered&&!!providerRow.modelData.lastError;ToolTip.text:providerRow.modelData.lastError||"";onClicked:page.controller.testLyricProvider(providerRow.modelData.id)}
-                        Toggle{objectName:"provider-enabled-"+providerRow.modelData.id;checked:page.value(providerRow.enabledKey,providerRow.modelData.enabled!==false)===true;Accessible.name:qsTr("Enable %1").arg(providerRow.modelData.name);onClicked:page.save(providerRow.enabledKey,checked)}
+                        Label{visible:!!text;text:providerPanel.covers&&providerRow.modelData.status==="empty"?qsTr("No matching cover"):page.providerStatus(providerRow.modelData.status||"unknown");color:providerRow.modelData.status==="available"?tokens.success:providerRow.modelData.status==="error"?tokens.danger:tokens.secondaryText;font.pixelSize:tokens.caption}
+                        FlatButton{objectName:(providerPanel.covers?"cover-provider-test-":"provider-test-")+providerRow.modelData.id;text:qsTr("Test");enabled:!providerPanel.busy(providerRow.modelData.status);Accessible.name:qsTr("Test %1").arg(providerRow.modelData.name);ToolTip.visible:hovered&&!!providerRow.modelData.lastError;ToolTip.text:providerRow.modelData.lastError||"";onClicked:providerPanel.covers?page.controller.testCoverProvider(providerRow.modelData.id):page.controller.testLyricProvider(providerRow.modelData.id)}
+                        Toggle{objectName:(providerPanel.covers?"cover-provider-enabled-":"provider-enabled-")+providerRow.modelData.id;checked:page.value(providerRow.enabledKey,providerRow.modelData.enabled!==false)===true;Accessible.name:qsTr("Enable %1").arg(providerRow.modelData.name);onClicked:page.save(providerRow.enabledKey,checked)}
                     }
                 }
             }
@@ -515,7 +534,7 @@ Item {
         property bool hasAdvanced:appearance||allRows.some(function(row){return row.advanced})
         property bool advanced:page.advancedFor(groupIndex,sectionIndex)
         property bool collapsed:page.isCollapsed(groupIndex,sectionIndex)
-        property bool specialized:(groupIndex===1&&(sectionIndex===0||sectionIndex===1))||(groupIndex===3&&(sectionIndex===0||sectionIndex===6))||appearance
+        property bool specialized:(groupIndex===2&&sectionIndex===0)||(groupIndex===1&&(sectionIndex===0||sectionIndex===1))||(groupIndex===3&&(sectionIndex===0||sectionIndex===6))||appearance
         objectName:"section-"+groupIndex+"/"+sectionIndex
         Layout.fillWidth:true;spacing:4;visible:specialized||allRows.length>0
         RowLayout {
@@ -538,6 +557,7 @@ Item {
                 id:sectionInner;x:16;width:Math.max(0,parent.width-16);height:implicitHeight;spacing:3
                 Loader{Layout.fillWidth:true;active:sectionBlock.groupIndex===1&&(sectionBlock.sectionIndex===0||sectionBlock.sectionIndex===1);sourceComponent:DevicePanel{sectionIndex:sectionBlock.sectionIndex}}
                 Loader{Layout.fillWidth:true;active:sectionBlock.groupIndex===3&&sectionBlock.sectionIndex===0;sourceComponent:ProviderPanel{}}
+                Loader{Layout.fillWidth:true;active:sectionBlock.groupIndex===2&&sectionBlock.sectionIndex===0;sourceComponent:ProviderPanel{covers:true}}
                 Loader{Layout.fillWidth:true;active:sectionBlock.groupIndex===3&&sectionBlock.sectionIndex===6;sourceComponent:LyricPresetsPanel{}}
                 Loader{Layout.fillWidth:true;active:sectionBlock.appearance;sourceComponent:AppearancePanel{sectionIndex:sectionBlock.sectionIndex}}
                 Repeater {model:page.rowsFor(sectionBlock.groupIndex,sectionBlock.sectionIndex).filter(function(row){return !row.subgroup});ParameterRow{required property var modelData;descriptor:modelData;sectionIndex:sectionBlock.sectionIndex}}
