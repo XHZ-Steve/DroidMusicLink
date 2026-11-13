@@ -27,12 +27,15 @@ Item {
     signal connectRequested()
     signal matchRequested()
     signal seekRequested(real position)
+    property real lyricFocus:0
     property real transitionProgress: 1
     property real textAlignment: split?1:0
     property var fromGeometry: ({})
     property var toGeometry: ({})
     property int transitionGeneration: 0
     function rectOf(item){return Qt.rect(item.x,item.y,item.width,item.height)}
+    function formatMix(a,b){return a+(b-a)*(1-Math.pow(1-transitionProgress,3))}
+    function protectLyricY(y){return Math.max(y,metadata.y+metadata.height+14-homeLyrics.y)}
     function mix(a,b){return a+(b-a)*transitionProgress}
     function geometry(name,target){
         if(!changingLayout)return target
@@ -59,7 +62,7 @@ Item {
         return Qt.rect(mix(a.x,b.x),y,mix(a.width,b.width),mix(a.height,b.height))
     }
     function freezeGeometry(){
-        const current={cover:rectOf(artwork),metadata:rectOf(metadata),lyrics:homeLyrics.opacity>.001?rectOf(homeLyrics):Qt.rect(metadata.x,Math.max(metadata.y+metadata.height+16,artwork.y+artwork.height+14),metadata.width,76),expansion:homeLyrics.expansion,expandedSplit:homeLyrics.expandedSplit,alignment:textAlignment,titleX:metadata.x+titleLabel.x,titleHeight:titleLabel.height,artistX:metadata.x+artistLabel.x,sourceX:metadata.x+sourceLabel.x,lyricOpacity:homeLyrics.opacity}
+        const current={cover:rectOf(artwork),metadata:rectOf(metadata),lyrics:homeLyrics.opacity>.001?rectOf(homeLyrics):Qt.rect(metadata.x,Math.max(metadata.y+metadata.height+16,artwork.y+artwork.height+14),metadata.width,76),expansion:homeLyrics.expansion,primary:expandedLyrics.primaryRect,tokens:expandedLyrics.primaryTokens(),expandedSplit:homeLyrics.expandedSplit,alignment:textAlignment,titleX:metadata.x+titleLabel.x,titleHeight:titleLabel.height,artistX:metadata.x+artistLabel.x,sourceX:metadata.x+sourceLabel.x,lyricOpacity:homeLyrics.opacity}
         layoutMotion.stop();fromGeometry=current;toGeometry=current
         transitionProgress=0;changingLayout=true
     }
@@ -80,17 +83,23 @@ Item {
         const p=horizontalProgress()
         return fromGeometry[key]+(toGeometry[key]-fromGeometry[key])*p-metadata.x
     }
-    function nextLayout(){freezeGeometry();controller.setSetting("home/layout",(mode+1)%3)}
+    function beginNextLayout(){freezeGeometry();controller.setSetting("home/layout",(mode+1)%3)}
+    function nextLayout(){
+        if(focusMotion.running)return
+        if(lyricsMode&&controller.lyrics.length&&motion&&active&&!changingLayout){focusMotion.start();return}
+        beginNextLayout()
+    }
+    NumberAnimation{id:focusMotion;target:canvas;property:"lyricFocus";from:0;to:1;duration:170;easing.type:Easing.InOutCubic;onFinished:canvas.beginNextLayout()}
     onModeChanged:if(ready){if(!active)cancelTransitionForResize();else{if(!changingLayout)freezeGeometry();scheduleTransition()}}
     onArtworkScaleChanged:cancelTransitionForResize()
     onWidthChanged:cancelTransitionForResize()
     onHeightChanged:cancelTransitionForResize()
     onActiveChanged:if(!active)cancelTransitionForResize()
     onTrackIdentityChanged:if(ready)cancelTransitionForResize()
-    function cancelTransitionForResize(){if(!ready)return;++transitionGeneration;layoutMotion.stop();transitionProgress=1;changingLayout=false;Qt.callLater(polishLayout)}
+    function cancelTransitionForResize(){if(!ready)return;++transitionGeneration;focusMotion.stop();layoutMotion.stop();lyricFocus=0;transitionProgress=1;changingLayout=false;Qt.callLater(polishLayout)}
     function polishLayout(){slots.ensurePolished()}
     Component.onCompleted:ready=true
-    NumberAnimation{id:layoutMotion;target:canvas;property:"transitionProgress";from:0;to:1;duration:460;easing.type:Easing.InOutCubic;onFinished:canvas.changingLayout=false}
+    NumberAnimation{id:layoutMotion;target:canvas;property:"transitionProgress";from:0;to:1;duration:460;easing.type:Easing.InOutCubic;onFinished:{canvas.changingLayout=false;canvas.lyricFocus=0}}
     Binding{target:canvas;property:"textAlignment";value:canvas.changingLayout?canvas.mix(canvas.fromGeometry.alignment,canvas.toGeometry.alignment):canvas.split?1:0}
     TypographyTokens{id:typography}
     DesignTokens{id:tokens;light:canvas.light;motion:canvas.motion;accent:canvas.accent}
@@ -178,26 +187,72 @@ Item {
         x:canvas.lyricGeometry.x;y:canvas.lyricGeometry.y;width:canvas.lyricGeometry.width;height:canvas.lyricGeometry.height
         readonly property real expansion:canvas.changingLayout?canvas.mix(canvas.fromGeometry.expansion,canvas.toGeometry.expansion):canvas.lyricsMode?1:0
         readonly property bool expandedSplit:canvas.changingLayout&&canvas.fromGeometry.expansion>.001?canvas.fromGeometry.expandedSplit:canvas.split
+        readonly property bool returning:canvas.lyricFocus>0
+        readonly property real travel:canvas.changingLayout?canvas.transitionProgress:0
+        readonly property real morph:returning?Math.max(0,Math.min(1,(travel-.2)/.8)):1-expansion
+        readonly property real primaryX:returning&&canvas.changingLayout?canvas.mix(canvas.fromGeometry.primary.x,compactLyrics.primaryRect.x):0
+        readonly property real primaryY:returning&&canvas.changingLayout?canvas.mix(canvas.fromGeometry.primary.y,compactLyrics.primaryRect.y):0
         readonly property real sizeRatio:.85/(expandedSplit?1:.9)
         opacity:canvas.changingLayout?canvas.fromGeometry.lyricOpacity+(canvas.toGeometry.lyricOpacity-canvas.fromGeometry.lyricOpacity)*(canvas.toGeometry.lyricOpacity>canvas.fromGeometry.lyricOpacity?canvas.transitionProgress*canvas.transitionProgress:1-Math.pow(1-canvas.transitionProgress,2)):canvas.displayingLyrics&&canvas.controller.lyrics.length?1:0
         visible:opacity>.001
         // Two stable text layouts share the same media timeline. Crossfading
         // weight and scaling their geometry avoids reshaping every word per frame.
         LyricView {
-            anchors.fill:parent;controller:canvas.controller;settingsRevision:canvas.settingsRevision;settingsPrefix:"lyrics"
-            compact:false;opacity:homeLyrics.expansion;visible:opacity>.001
+            id:expandedLyrics;objectName:"expandedHomeLyrics"
+            width:homeLyrics.returning&&canvas.changingLayout?canvas.fromGeometry.lyrics.width:parent.width
+            height:homeLyrics.returning&&canvas.changingLayout?canvas.fromGeometry.lyrics.height:parent.height
+            x:homeLyrics.returning&&canvas.changingLayout?homeLyrics.primaryX-primaryRect.x*scale:0
+            y:homeLyrics.returning&&canvas.changingLayout?homeLyrics.primaryY-primaryRect.y*scale:0
+            controller:canvas.controller;settingsRevision:canvas.settingsRevision;settingsPrefix:"lyrics"
+            compact:false;originalFocus:canvas.lyricFocus
+            opacity:homeLyrics.returning&&canvas.changingLayout?0:homeLyrics.expansion;visible:opacity>.001||homeLyrics.returning
+            transformOrigin:Item.TopLeft
             scale:homeLyrics.sizeRatio+(1-homeLyrics.sizeRatio)*homeLyrics.expansion
             configuration:({alignment:homeLyrics.expandedSplit?canvas.controller.setting("lyrics/alignment","left"):"center",fontSize:canvas.controller.setting("lyrics/fontSize",28)*(homeLyrics.expandedSplit?1:.9)})
             textColor:canvas.textColor;inactiveColor:canvas.secondaryColor;motion:canvas.motion&&!canvas.changingLayout
             onSeekRequested:function(position){canvas.seekRequested(position)}
         }
         LyricView {
-            anchors.fill:parent;controller:canvas.controller;settingsRevision:canvas.settingsRevision;settingsPrefix:"lyrics"
-            compact:true;compactLines:1;opacity:1-homeLyrics.expansion;visible:opacity>.001
+            id:compactLyrics;objectName:"compactHomeLyrics"
+            width:homeLyrics.returning&&canvas.changingLayout?canvas.toGeometry.lyrics.width:parent.width
+            height:homeLyrics.returning&&canvas.changingLayout?canvas.toGeometry.lyrics.height:parent.height
+            x:homeLyrics.returning&&canvas.changingLayout?homeLyrics.primaryX-primaryRect.x*scale:0
+            y:homeLyrics.returning&&canvas.changingLayout?homeLyrics.primaryY-primaryRect.y*scale:0
+            controller:canvas.controller;settingsRevision:canvas.settingsRevision;settingsPrefix:"lyrics"
+            compact:true;compactLines:1;opacity:homeLyrics.returning?0:1-homeLyrics.expansion;visible:homeLyrics.returning||opacity>.001
+            transformOrigin:Item.TopLeft
             scale:1+(1/homeLyrics.sizeRatio-1)*homeLyrics.expansion
             configuration:({fontSize:canvas.controller.setting("lyrics/fontSize",28)*.85,activeWeight:canvas.controller.setting("lyrics/activeWeight",500),longLine:"elide",alignment:"center",translation:false,romanization:false,autoScroll:true})
             textColor:canvas.textColor;inactiveColor:canvas.secondaryColor;motion:canvas.motion&&!canvas.changingLayout
             onSeekRequested:function(position){canvas.seekRequested(position)}
+        }
+        Item {
+            id:originalMorph;objectName:"originalLyricMorph";anchors.fill:parent
+            visible:homeLyrics.returning&&canvas.changingLayout
+            Repeater {
+                model:originalMorph.visible?canvas.fromGeometry.tokens:[]
+                Text {
+                    id:morphWord;required property var modelData
+                    readonly property font targetFace:Qt.font({family:modelData.family,pixelSize:compactLyrics.fontSize,weight:compactLyrics.activeWeight,letterSpacing:compactLyrics.option("letterSpacing",0)})
+                    TextMetrics{id:prefixMeasure;font:morphWord.targetFace;text:morphWord.modelData.prefix}
+                    readonly property real targetX:compactLyrics.primaryRect.x+(compactLyrics.inkPadding+prefixMeasure.advanceWidth)*compactLyrics.activeScale
+                    readonly property real targetY:compactLyrics.primaryRect.y+compactLyrics.inkPadding*compactLyrics.activeScale
+                    x:modelData.rect.x+(targetX-modelData.rect.x)*(1-Math.pow(1-canvas.transitionProgress,3))
+                    readonly property bool wrapped:canvas.fromGeometry.tokens.length&&modelData.rect.y>canvas.fromGeometry.tokens[0].rect.y+1
+                    y:canvas.protectLyricY(canvas.mix(modelData.rect.y,targetY)+(wrapped?Math.sin(Math.PI*canvas.transitionProgress)*18:0))
+                    scale:canvas.formatMix(modelData.scale,compactLyrics.fontSize*compactLyrics.activeScale/Math.max(1,expandedLyrics.fontSize));transformOrigin:Item.TopLeft
+                    text:modelData.text;textFormat:Text.PlainText
+                    color:expandedLyrics.colorOption("sungColor",canvas.textColor)
+                    font.family:modelData.family;font.pixelSize:expandedLyrics.fontSize
+                    font.weight:Math.round(canvas.formatMix(expandedLyrics.activeWeight,compactLyrics.activeWeight))
+                    font.letterSpacing:canvas.formatMix(expandedLyrics.option("letterSpacing",0),compactLyrics.option("letterSpacing",0))
+                    renderType:Text.CurveRendering;renderTypeQuality:104;wrapMode:Text.NoWrap;lineHeight:expandedLyrics.option("lineHeight",1.25)
+                    readonly property real fill:!modelData.timed?1:Math.max(0,Math.min(1,(canvas.controller.lyricPosition-modelData.time)/Math.max(1,modelData.end-modelData.time)))
+                    Item{visible:morphWord.fill<1;x:morphWord.width*morphWord.fill;width:morphWord.width*(1-morphWord.fill);height:morphWord.height;clip:true
+                        Text{x:-parent.x;text:morphWord.text;textFormat:Text.PlainText;font:morphWord.font;color:expandedLyrics.colorOption("unsungColor",canvas.secondaryColor);renderType:Text.CurveRendering;renderTypeQuality:104;lineHeight:expandedLyrics.option("lineHeight",1.25)}
+                    }
+                }
+            }
         }
     }
     RowLayout {

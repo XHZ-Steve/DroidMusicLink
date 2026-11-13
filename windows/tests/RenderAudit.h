@@ -11,6 +11,7 @@
 #include <QFile>
 #include <QDir>
 #include <QImage>
+#include <QFont>
 #include <QCoreApplication>
 #include <windows.h>
 #include <psapi.h>
@@ -24,14 +25,17 @@ inline void startLayoutMotionAudit(QQuickWindow *window,const QString &directory
  auto covers=visualItemsNamed(window,"heroArtwork"),titles=visualItemsNamed(window,"trackTitle");
  if(covers.isEmpty()||titles.isEmpty()){app.exit(12);return;}
  auto cover=covers.first(),title=titles.first();QDir().mkpath(directory);
- struct State{int phase=0,frame=0;QElapsedTimer clock;QJsonArray samples;};auto state=std::make_shared<State>();
+ struct State{int phase=0,frame=0;QElapsedTimer clock;QJsonArray samples;QJsonArray spacing;};auto state=std::make_shared<State>();
  auto timer=new QTimer(window);timer->setInterval(16);timer->setTimerType(Qt::PreciseTimer);
  QObject::connect(timer,&QTimer::timeout,window,[=,&app]{
   const auto elapsed=state->clock.elapsed();const auto cp=cover->mapToScene(QPointF()),tp=title->mapToScene(QPointF());
-  state->samples.append(QJsonObject{{"phase",state->phase},{"ms",elapsed},{"progress",canvas->property("transitionProgress").toDouble()},{"coverX",cp.x()},{"coverY",cp.y()},{"coverWidth",cover->width()},{"titleX",tp.x()},{"titleY",tp.y()}});
-  if(state->frame++%6==0&&captureFrames){auto grab=window->contentItem()->grabToImage(QSize(840,570));if(grab)QObject::connect(grab.data(),&QQuickItemGrabResult::ready,window,[grab,path=directory+QString("/phase-%1-frame-%2.png").arg(state->phase).arg(state->frame,3,10,QChar('0'))]{grab->saveToFile(path);});}
+  if(state->phase==0&&state->frame==0){
+   for(int i=0;i<12;++i)for(auto row:visualItemsNamed(window,"lyricRow-"+QString::number(i))){if(!row->isVisible())continue;const auto face=qvariant_cast<QFont>(row->property("face"));state->spacing.append(QJsonObject{{"selected",row->property("selected").toBool()},{"wordSpacing",face.wordSpacing()}});}
+  }
+  state->samples.append(QJsonObject{{"focus",canvas->property("lyricFocus").toDouble()},{"phase",state->phase},{"ms",elapsed},{"progress",canvas->property("transitionProgress").toDouble()},{"coverX",cp.x()},{"coverY",cp.y()},{"coverWidth",cover->width()},{"titleX",tp.x()},{"titleY",tp.y()}});
+  if(state->frame++%6==0&&captureFrames){auto grab=window->contentItem()->grabToImage(window->size().scaled(QSize(840,570),Qt::KeepAspectRatio));if(grab)QObject::connect(grab.data(),&QQuickItemGrabResult::ready,window,[grab,path=directory+QString("/phase-%1-frame-%2.png").arg(state->phase).arg(state->frame,3,10,QChar('0'))]{grab->saveToFile(path);});}
   if(elapsed<700||canvas->property("changingLayout").toBool())return;
-  if(++state->phase==3){timer->stop();QFile report(directory+"/motion-report.json");if(report.open(QIODevice::WriteOnly))report.write(QJsonDocument(QJsonObject{{"samples",state->samples},{"dpr",window->devicePixelRatio()}}).toJson());app.exit(0);return;}
+  if(++state->phase==3){timer->stop();QFile report(directory+"/motion-report.json");if(report.open(QIODevice::WriteOnly))report.write(QJsonDocument(QJsonObject{{"samples",state->samples},{"spacing",state->spacing},{"dpr",window->devicePixelRatio()}}).toJson());app.exit(0);return;}
   state->frame=0;state->clock.restart();QMetaObject::invokeMethod(canvas,"nextLayout");
  });
  QTimer::singleShot(1400,window,[=]{state->clock.start();QMetaObject::invokeMethod(canvas,"nextLayout");timer->start();});

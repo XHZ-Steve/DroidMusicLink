@@ -150,7 +150,7 @@ Item {
         highlightedKey="";restoreScroll.restart()
     }
     function navigate(group,section){
-        activeGroup=Math.max(0,Math.min(5,group));activeSection=Math.max(0,section)
+        pendingGroup=Math.max(0,Math.min(5,group));activeGroup=pendingGroup;activeSection=Math.max(0,section)
         setSectionExpanded(activeGroup,activeSection,true);searchField.clear();sectionJump.restart()
     }
     function goBack(){if(!navigationHistory.length)return;const history=navigationHistory.slice();const key=Number(history.pop());navigationHistory=history;restoringHistory=true;activeGroup=key;activeSection=0;searchField.clear()}
@@ -477,6 +477,10 @@ Item {
         required property int sectionIndex
         required property var subgroupData
         property bool collapsed:page.subgroupCollapsed(groupIndex,sectionIndex,subgroupData.key)
+        property bool expandedOnce:false
+        readonly property bool rowsLoaded:!collapsed||expandedOnce
+        Component.onCompleted:if(!collapsed)expandedOnce=true
+        onCollapsedChanged:if(!collapsed)expandedOnce=true
         objectName:"subgroup-"+groupIndex+"/"+sectionIndex+"/"+subgroupData.key
         Layout.fillWidth:true;spacing:2
         FlatButton {
@@ -493,7 +497,7 @@ Item {
             Behavior on reveal{NumberAnimation{duration:tokens.fast;easing.type:Easing.OutCubic}}
             ColumnLayout {
                 id:subgroupRows;x:14;width:Math.max(0,parent.width-14);height:implicitHeight;spacing:3
-                Repeater{model:page.rowsFor(subgroup.groupIndex,subgroup.sectionIndex).filter(function(row){return row.subgroup===subgroup.subgroupData.key});ParameterRow{required property var modelData;descriptor:modelData;sectionIndex:subgroup.sectionIndex}}
+                Repeater{model:subgroup.rowsLoaded?page.rowsFor(subgroup.groupIndex,subgroup.sectionIndex).filter(function(row){return row.subgroup===subgroup.subgroupData.key}):[];ParameterRow{required property var modelData;descriptor:modelData;sectionIndex:subgroup.sectionIndex}}
             }
         }
     }
@@ -589,7 +593,23 @@ Item {
             ScrollBar.vertical:ScrollBar{policy:ScrollBar.AsNeeded;contentItem:Rectangle{implicitWidth:5;radius:3;color:tokens.secondaryText;opacity:.45}}
             ColumnLayout {
                 id:contentColumn;width:contentScroll.availableWidth-12;spacing:10
-                Repeater{model:page.sectionsForGroup(page.activeGroup);SectionBlock{required property var modelData;sectionIndex:modelData.index}}
+                Repeater {
+                    model:6
+                    Loader {
+                        id:groupCache;required property int index
+                        property bool visited:false
+                        objectName:"settings-group-cache-"+index
+                        Layout.fillWidth:true;visible:page.activeGroup===index
+                        active:visited;asynchronous:true
+                        onVisibleChanged:if(visible)visited=true
+                        Component.onCompleted:if(visible)visited=true
+                        onLoaded:if(page.activeGroup===index){restoreScroll.restart();sectionJump.restart();if(page.highlightedKey)jumpTimer.restart()}
+                        sourceComponent:ColumnLayout {
+                            width:groupCache.width;spacing:10
+                            Repeater{model:page.sectionsForGroup(groupCache.index);SectionBlock{required property var modelData;groupIndex:groupCache.index;sectionIndex:modelData.index}}
+                        }
+                    }
+                }
                 Item{Layout.fillWidth:true;implicitHeight:20}
             }
         }

@@ -2,6 +2,7 @@
 #include "TrayPerformance.h"
 #include <QElapsedTimer>
 #include "../tests/RenderAudit.h"
+#include "../tests/SettingsPerformanceAudit.h"
 #include "../tests/UiBindingSmoke.h"
 #include "../tests/NativeChromeSmoke.h"
 #include <QApplication>
@@ -80,6 +81,7 @@ QObject::connect(&app,&QCoreApplication::aboutToQuit,&backend,[&]{settings.setVa
  const int nativeFrameIndex=arguments.indexOf("--native-frame-smoke");
  if(profileIndex>=0&&nativeFrameIndex>=0&&nativeFrameIndex+1<arguments.size())startNativeChromeSmoke(captureWindow,arguments[nativeFrameIndex+1],app);
  const int auditIndex=arguments.indexOf("--resize-audit");if(profileIndex>=0&&auditIndex>=0&&auditIndex+1<arguments.size())startRenderAudit(window,arguments[auditIndex+1],app);
+ const int settingsPerfIndex=arguments.indexOf("--settings-performance-audit");if(profileIndex>=0&&settingsPerfIndex>=0&&settingsPerfIndex+1<arguments.size())startSettingsPerformanceAudit(window,arguments[settingsPerfIndex+1],app);
  const int motionIndex=arguments.indexOf("--layout-motion-audit");if(profileIndex>=0&&motionIndex>=0&&motionIndex+1<arguments.size())startLayoutMotionAudit(window,arguments[motionIndex+1],app,!arguments.contains("--motion-metrics-only"));
  if(profileIndex>=0&&arguments.contains("--settings-binding-smoke"))startUiBindingSmoke(window,backend,QDir(arguments[profileIndex+1]).filePath("ui-binding-smoke.json"),app);
  const int transportIndex=arguments.indexOf("--transport-smoke");if(transportIndex>=0&&transportIndex+1<arguments.size())startTransportSmoke(window,backend,arguments[transportIndex+1],app);
