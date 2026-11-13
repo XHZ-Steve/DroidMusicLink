@@ -27,14 +27,26 @@ Item {
         function init(){controller.title="TEST album title";controller.artist="TEST artist";controller.appName="TEST player";controller.setSetting("home/layout",0);wait(550)}
         function test_cover_cycles_three_persistent_modes(){
             const cover=findChild(canvas,"heroArtwork");const control=findChild(canvas,"coverLayoutSwitch");const lyrics=findChild(canvas,"homeLyrics")
-            verify(cover);verify(control);verify(lyrics);compare(canvas.mode,0);compare(lyrics.compact,true)
+            verify(cover);verify(control);verify(lyrics);compare(canvas.mode,0);compare(findChild(lyrics,"compactHomeLyrics").compact,true)
             const centered=cover.x+cover.width/2;verify(Math.abs(centered-canvas.width/2)<1)
             mouseClick(control,control.width/2,control.height/2);compare(controller.values["home/layout"],1);tryCompare(canvas,"mode",1);wait(520)
             compare(lyrics.visible,false);compare(controller.values.showLyrics,true)
             mouseClick(control,control.width/2,control.height/2);tryCompare(canvas,"mode",2);wait(520)
-            compare(lyrics.compact,false);compare(lyrics.visible,true)
+            compare(findChild(lyrics,"expandedHomeLyrics").compact,false);compare(lyrics.visible,true)
             mouseClick(control,control.width/2,control.height/2);tryCompare(canvas,"mode",0);wait(520)
             tryVerify(function(){return Math.abs(cover.x+cover.width/2-canvas.width/2)<1},1500,"Cover must settle at canvas center")
+        }
+        function test_returning_lyric_moves_immediately_and_crossfades(){
+            controller.setSetting("home/layout",2);tryCompare(canvas,"changingLayout",false,1500)
+            const expanded=findChild(canvas,"expandedHomeLyrics"),compact=findChild(canvas,"compactHomeLyrics"),morph=findChild(canvas,"originalLyricMorph")
+            const cover=findChild(canvas,"heroArtwork"),startX=cover.x
+            canvas.nextLayout()
+            tryVerify(function(){return canvas.changingLayout&&canvas.transitionProgress>0},250)
+            verify(canvas.lyricFocus>0,"Focus and layout must run concurrently")
+            tryVerify(function(){return Math.abs(cover.x-startX)>.01},350)
+            tryVerify(function(){return compact.opacity>0&&compact.opacity<1&&morph.opacity>0&&morph.opacity<1},700)
+            verify(expanded.opacity<.01)
+            tryCompare(canvas,"changingLayout",false,1000);compare(compact.opacity,1)
         }
         function test_geometry_interpolates_between_modes(){
             const cover=findChild(canvas,"heroArtwork");const x=cover.x
@@ -95,7 +107,7 @@ Item {
         function test_narrow_lyrics_remain_centered_and_focused(){
             host.width=520;host.height=520;controller.setSetting("home/layout",2)
             tryCompare(canvas,"changingLayout",false,1500)
-            const lyrics=findChild(canvas,"homeLyrics"),timeline=findChild(lyrics,"lyricTimeline")
+            const lyrics=findChild(canvas,"expandedHomeLyrics"),timeline=findChild(lyrics,"lyricTimeline")
             compare(lyrics.alignment,"center")
             tryVerify(function(){return timeline.itemAtIndex(controller.currentLine)!==null})
             lyrics.recover();wait(550)

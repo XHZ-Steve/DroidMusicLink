@@ -76,7 +76,8 @@ Item {
     readonly property var providerRows: {
         settingsRevision
         const sources=controller&&controller.lyricProviders?controller.lyricProviders.slice():[]
-        const order=String(value("lyrics/providerPriority","lrclib,netease,qq,kugou")).split(",")
+        const order=String(value("lyrics/providerPriority","phone,netease,qq,kugou,lrclib")).split(",")
+        if(order.indexOf("phone")<0)order.unshift("phone")
         return sources.sort(function(a,b){const ai=order.indexOf(a.id),bi=order.indexOf(b.id);return (ai<0?100:ai)-(bi<0?100:bi)})
     }
     readonly property var lyricPresetRows: {settingsRevision;return controller&&controller.lyricPresets?controller.lyricPresets.map(function(row){return {label:row.label||row.name,value:row.name,builtIn:row.builtIn}}):[]}
@@ -588,6 +589,11 @@ Item {
                 }
                 Label{visible:page.searchResults.length===0;text:qsTr("No matching settings");color:tokens.secondaryText;padding:12}
             }
+        }
+        BusyIndicator {
+            objectName:"settingsLoading";Layout.alignment:Qt.AlignHCenter
+            running:page.visible&&!resultsScroll.visible&&groupCaches.itemAt(page.activeGroup)&&groupCaches.itemAt(page.activeGroup).status!==Loader.Ready
+            visible:running;implicitWidth:30;implicitHeight:30
         }
         ScrollView {
             id:contentScroll;objectName:"settingsScroll";transform:Translate{id:categoryOffset}

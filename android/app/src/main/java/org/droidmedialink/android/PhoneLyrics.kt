@@ -12,6 +12,7 @@ internal object PhoneLyrics {
  private val timeTag=Regex("\\[\\d{1,3}:\\d{2}(?:[.:]\\d{1,3})?]")
  private var previous:String?=null
  private var decoded=""
+ private var translation=""
  private var songName=""
  private var artist=""
  private fun validate(text:String):String {
@@ -22,10 +23,10 @@ internal object PhoneLyrics {
  private fun decode(raw:String):String {
   if(raw.length>limit)return ""
   if(previous==raw)return decoded
-  previous=raw;songName="";artist=""
+  previous=raw;songName="";artist="";translation=""
   decoded=if(raw.trimStart().startsWith("{"))runCatching {
    val json=JSONObject(raw)
-   songName=json.optString("songName");artist=json.optString("artist")
+   songName=json.optString("songName");artist=json.optString("artist");translation=validate(json.optString("translationLyric"))
    // Documented player-owned lyricInfo payload; absence is normal.
    if(json.optBoolean("noLyric",false)) "" else validate(json.optString("rawLyric")).ifEmpty{validate(json.optString("lyric"))}
   }.getOrDefault("") else validate(raw)
@@ -38,6 +39,7 @@ internal object PhoneLyrics {
   if(artist.isNotBlank()&&singer.isNotBlank()&&!artist.trim().equals(singer.trim(),true))return ""
   return text
  }
+ fun translated(original:String):String=if(original.isNotEmpty()&&original.toByteArray(Charsets.UTF_8).size+translation.toByteArray(Charsets.UTF_8).size<=limit)translation else ""
  fun read(metadata:MediaMetadata?,extras:Bundle?):String {
   val keys=runCatching{metadata?.keySet().orEmpty().filter{it=="lyricInfo"||keyPattern.containsMatchIn(it)}.take(8)}.getOrDefault(emptyList())
   for(key in keys){val raw=runCatching{metadata?.getText(key)?.toString().orEmpty()}.getOrDefault("");matching(decode(raw),metadata).takeIf{it.isNotEmpty()}?.let{return it}}

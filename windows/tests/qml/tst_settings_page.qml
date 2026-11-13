@@ -96,6 +96,7 @@ Item {
         function test_scoped_parameters_respect_inheritance(){
             page.navigate(4,2)
             page.appearanceScope="dock"
+            tryVerify(function(){return !!findChild(page,"editor-glassMotion")})
             const toggle=findChild(page,"editor-glassMotion")
             verify(toggle);compare(toggle.enabled,false)
             controller.setAppearanceInherited("dock",false)
@@ -103,6 +104,13 @@ Item {
             waitForRendering(page)
             mouseClick(toggle,toggle.width/2,toggle.height/2)
             compare(controller.appearance.glassMotion,false)
+        }
+        function test_a_cold_category_shows_loading_indicator(){
+            page.navigate(5,0)
+            const cache=findChild(page,"settings-group-cache-5"),spinner=findChild(page,"settingsLoading")
+            verify(cache);verify(spinner)
+            if(cache.status!==Loader.Ready)verify(spinner.running)
+            tryCompare(cache,"status",Loader.Ready);tryCompare(spinner,"running",false)
         }
         function test_action_routes_to_host(){
             page.runAction({key:"test-search",action:"searchDevices"})
@@ -116,6 +124,7 @@ Item {
         }
         function test_numeric_editor_validates_bounds(){
             page.navigate(3,4);page.expandAdvanced();waitForRendering(page)
+            tryVerify(function(){return !!findChild(page,"number-lyrics/offset")})
             const field=findChild(page,"number-lyrics/offset")
             verify(field);field.forceActiveFocus();field.text="-300";keyClick(Qt.Key_Return)
             compare(controller.values["lyrics/offset"],-300)
@@ -160,6 +169,7 @@ Item {
             compare(controller.values["lyrics/providers/lrclib/enabled"],false)
         }
         function test_provider_drag_persists_priority(){
+            controller.setSetting("lyrics/providerPriority","lrclib,netease")
             page.navigate(3,0);waitForRendering(page)
             const grip=findChild(page,"provider-drag-lrclib")
             verify(grip)

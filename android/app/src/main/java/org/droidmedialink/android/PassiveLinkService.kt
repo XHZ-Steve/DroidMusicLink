@@ -78,10 +78,10 @@ class PassiveLinkService : Service() {
   private val challenges=ConcurrentHashMap<WebSocket,Challenge>()
   private fun sendMediaSnapshot(conn:WebSocket,data:JSONObject) {
    val lyrics=data.optString("phoneLyrics")
-   val identity=listOf("sessionId","title","artist","album","durationMs").joinToString("\u0000"){data.optString(it)}+"\u0000"+lyrics
+   val identity=listOf("sessionId","title","artist","album","durationMs").joinToString("\u0000"){data.optString(it)}+"\u0000"+lyrics+"\u0000"+data.optString("phoneTranslation")
    val snapshot=JSONObject()
    val repeated=lastPhoneLyrics.put(conn,identity)==identity
-   for(key in data.keys())if(key!="phoneLyrics"||!repeated)snapshot.put(key,data.get(key))
+   for(key in data.keys())if((key!="phoneLyrics"&&key!="phoneTranslation")||!repeated)snapshot.put(key,data.get(key))
    send(conn,"session_snapshot",snapshot)
   }
   override fun onStart() {

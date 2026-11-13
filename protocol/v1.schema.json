@@ -395,6 +395,7 @@
               "favoriteKnown": {
                 "type": "boolean"
               },
+              "phoneTranslation": {"type": "string", "maxLength": 65536},
               "phoneLyrics": {
                 "type": "string",
                 "maxLength": 65536

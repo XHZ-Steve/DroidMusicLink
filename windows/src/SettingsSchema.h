@@ -37,11 +37,12 @@ inline QVariantList descriptors(){
  S("info/volume","Phone volume",2,3,"readonly","");
  S("lyrics/online","Online lyrics",3,0,"bool",true);
  S("lyrics/phoneSource","Phone lyrics",3,0,"enum","prefer",0,1,1,QVariantList{QVariantMap{{"label",QCoreApplication::translate("Settings","Prefer phone lyrics")},{"value","prefer"}},QVariantMap{{"label",QCoreApplication::translate("Settings","Phone lyrics only")},{"value","only"}},QVariantMap{{"label",QCoreApplication::translate("Settings","Off")},{"value","off"}}},false,QCoreApplication::translate("Settings","Uses complete lyric text published by the player. Availability depends on the player; no private app files are read."));
- S("lyrics/providerPriority","Provider priority",3,0,"providerOrder","netease,qq,kugou,lrclib");
- S("lyrics/preferredProvider","Preferred lyric source",3,0,"enum","auto",0,1,1,options({"auto","netease","qq","kugou","lrclib"}));
+ S("lyrics/providerPriority","Provider priority",3,0,"providerOrder","phone,netease,qq,kugou,lrclib");
+ S("lyrics/preferredProvider","Preferred lyric source",3,0,"enum","auto",0,1,1,options({"auto"})+QVariantList{QVariantMap{{"label",QCoreApplication::translate("Settings","Phone lyrics")},{"value","phone"}}}+options({"netease","qq","kugou","lrclib"}));
  S("lyrics/preferCurrentApp","Prefer current player source",3,0,"bool",true);
  S("lyrics/crossSourceTranslation","Supplement translation from other sources",3,0,"bool",false);
  S("lyrics/matchStrategy","Matching strategy",3,1,"enum","default",0,1,1,QVariantList{QVariantMap{{"label",QCoreApplication::translate("Settings","Default")},{"value","default"}},QVariantMap{{"label",QCoreApplication::translate("Settings","strict")},{"value","strict"}},QVariantMap{{"label",QCoreApplication::translate("Settings","balanced")},{"value","balanced"}}});
+ S("lyrics/providers/phone/enabled","Phone lyrics",3,0,"bool",true);
  S("lyrics/providers/netease/enabled","NetEase lyrics",3,0,"bool",true);
  S("lyrics/providers/qq/enabled","QQ Music lyrics",3,0,"bool",true);
  S("lyrics/providers/kugou/enabled","Kugou lyrics",3,0,"bool",true);
@@ -93,7 +94,7 @@ inline bool normalize(const QString &key,const QVariant &input,QVariant *output)
  else if(type=="int"||type=="number"){bool ok=false;double number=input.toDouble(&ok);if(!ok||!std::isfinite(number))return false;number=qBound(row["min"].toDouble(),number,row["max"].toDouble());result=type=="int"?QVariant(qRound(number)):QVariant(number);}
  else if(type=="color"){if(input.toString()=="auto"&&row.value("defaultValue").toString()=="auto"){if(output)*output="auto";return true;}QColor color(input.toString());if(!color.isValid())return false;result=color.name(QColor::HexArgb);}
  else if(type=="shortcut"){auto keys=QKeySequence::fromString(input.toString(),QKeySequence::PortableText);if(keys.isEmpty()||keys.count()>2)return false;result=keys.toString(QKeySequence::PortableText);}
- else if(type=="providerOrder"){auto ids=input.toString().split(',',Qt::SkipEmptyParts);if(ids.size()!=4||QSet<QString>(ids.begin(),ids.end())!=QSet<QString>{"netease","qq","kugou","lrclib"})return false;result=ids.join(',');}
+ else if(type=="providerOrder"){auto ids=input.toString().split(',',Qt::SkipEmptyParts);if(ids.size()==4&&QSet<QString>(ids.begin(),ids.end())==QSet<QString>{"netease","qq","kugou","lrclib"})ids.prepend("phone");if(ids.size()!=5||QSet<QString>(ids.begin(),ids.end())!=QSet<QString>{"phone","netease","qq","kugou","lrclib"})return false;result=ids.join(',');}
  else if(type=="enum"){bool found=false;for(const auto &option:row["options"].toList())if(option.toMap()["value"].toString()==input.toString()){found=true;result=option.toMap()["value"];}if(!found)return false;}
  else return false;
  if(output)*output=result;return true;

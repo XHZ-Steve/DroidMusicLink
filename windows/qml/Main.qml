@@ -209,7 +209,7 @@ ApplicationWindow {
             Layout.alignment:Qt.AlignHCenter;Layout.preferredWidth:Math.min(660,canvasLayout.width);implicitHeight:capsule?84:100;visible:root.page===0
             sourceItem:ambient;glassEnabled:root.liquidStyle;cornerRadius:design.dockRadius;dark:!root.light;active:root.visible&&root.visibility!==Window.Minimized&&visible;backdropColor:root.bg;tintColor:design.elevated;tintStrength:root.light?.10+root.glass*.44:.04+root.glass*.25;fallbackColor:design.surface
             CapsuleProgress {
-                anchors.left:parent.left;anchors.right:parent.right;height:playbackDock.height/2+8;radius:playbackDock.height/2;visible:playbackDock.capsule
+                anchors.left:parent.left;anchors.right:parent.right;height:playbackDock.height/2+20;radius:playbackDock.height/2;visible:playbackDock.capsule
                 from:0;to:Math.max(1,backend.duration);value:backend.position;enabled:root.supports("seek");accent:root.accent;trackColor:root.light?"#4024303b":"#38e0e5ff"
                 Accessible.name:qsTr("Playback position");onPressedChanged:if(!pressed)backend.command("seek",value)
             }

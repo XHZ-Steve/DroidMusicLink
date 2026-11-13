@@ -1,4 +1,5 @@
 #include "Bridge.h"
+#include "LyricTimeline.h"
 #include <QCoreApplication>
 #include <QTemporaryDir>
 #include <QFile>
@@ -61,7 +62,7 @@ public:
   QStringList requests;QObject::connect(&chainServer,&QTcpServer::newConnection,&chainServer,[&]{auto socket=chainServer.nextPendingConnection();QObject::connect(socket,&QTcpSocket::disconnected,socket,&QObject::deleteLater);QObject::connect(socket,&QTcpSocket::readyRead,socket,[&,socket]{const auto bytes=socket->readAll();if(bytes.isEmpty())return;const auto path=QString::fromUtf8(bytes.split(' ').value(1));requests<<path;QJsonObject response;bool failed=false;
    if(path.contains("music.163.com")){response={{"code",503}};failed=true;}
    else if(path.contains("client_search_cp")){const QJsonObject song{{"songmid","testfallback"},{"songname","TEST fallback"},{"singer",QJsonArray{QJsonObject{{"name","TEST fixture"}}}},{"albumname","TEST"},{"interval",30}};response={{"data",QJsonObject{{"song",QJsonObject{{"list",QJsonArray{song}}}}}}};}
-   else response={{"lyric",QString::fromLatin1(QByteArray("[00:00]TEST FALLBACK FIRST\n[00:05]TEST FALLBACK NEXT").toBase64())}};
+   else response={{"lyric",QString::fromLatin1(QByteArray("[00:00]TEST FALLBACK FIRST\n[00:05]TEST FALLBACK NEXT").toBase64())},{"trans",QString::fromLatin1(QByteArray("[00:00]TEST translated first\n[00:05]TEST translated next").toBase64())}};
    const auto body=QJsonDocument(response).toJson(QJsonDocument::Compact);socket->write(QByteArray(failed?"HTTP/1.1 503 Service Unavailable\r\n":"HTTP/1.1 200 OK\r\n")+"Content-Type: application/json\r\nContent-Length: "+QByteArray::number(body.size())+"\r\nConnection: close\r\n\r\n"+body);socket->disconnectFromHost();});});
   LoopbackProviderNetwork providerNetwork;providerNetwork.port=chainServer.serverPort();Bridge fallback;
   delete fallback.m_lyricProviders;fallback.m_lyricProviders=new LyricProviders(&providerNetwork,&fallback);
@@ -71,6 +72,21 @@ public:
   if(fallback.lyricProvider()!="qq"||fallback.lyrics().size()!=2||requests.size()!=3||!requests.first().contains("music.163.com"))return 14;
   fallback.fetchLyrics();if(fallback.lyricSource()!="cache"||fallback.lyricProvider()!="qq"||fallback.lyrics().size()!=2)return 15;
   qInfo()<<"PASS: actual provider chain survives first-source HTTP failure, selects next trusted source, and replays rich cache";
+  fallback.m_settings.setValue("preferences/lyrics/crossSourceTranslation",true);
+  fallback.applyMedia({{"phoneLyrics","[00:00]<00:00>TEST FALLBACK FIRST\n[00:05]TEST FALLBACK NEXT"},{"phoneTranslation",""}});
+  QEventLoop translatedWait;QObject::connect(&fallback,&Bridge::lyricsChanged,&translatedWait,[&]{if(!fallback.lyrics().isEmpty()&&!fallback.lyrics().first().toMap()["translation"].toString().isEmpty())translatedWait.quit();});QTimer::singleShot(5000,&translatedWait,&QEventLoop::quit);translatedWait.exec();
+  if(fallback.lyricProvider()!="phone"||fallback.lyrics().first().toMap()["translation"]!="TEST translated first"||fallback.lyrics().first().toMap()["words"].toList().isEmpty())return 84;
+  qInfo()<<"PASS: online translation supplements phone word lyrics through the real provider chain";
+  Bridge phone;phone.m_settings.setValue("preferences/lyrics/online",false);phone.m_settings.setValue("preferences/lyrics/crossSourceTranslation",true);
+  phone.applyMedia({{"title","TEST PHONE SOURCE"},{"artist","TEST fixture"},{"durationMs",30000},{"phoneLyrics","[00:01]TEST first\n[00:05]TEST second\n[00:09]TEST third"},{"phoneTranslation","[00:01]Translated first\n[00:05]Translated second\n[00:09]Translated third"}});
+  if(phone.lyricProvider()!="phone"||phone.lyrics().size()!=3||phone.lyrics()[1].toMap()["translation"]!="Translated second")return 80;
+  auto manual=LyricTimeline::parse("[00:01]TEST first\n[00:05]TEST second\n[00:09]TEST third");
+  phone.acceptLyricDocument(LyricDocument{manual,"local","test","lrc",100},true);
+  if(phone.lyricSource()!="manual"||phone.lyricProvider()!="local"||phone.lyrics()[0].toMap()["translation"]!="Translated first")return 81;
+  phone.applyMedia({{"phoneLyrics","[00:01]TEST first\n[00:05]TEST second\n[00:09]TEST third"},{"phoneTranslation","[00:01]Replacement translation\n[00:05]Translated second\n[00:09]Translated third"}});
+  if(phone.lyricProvider()!="local"||phone.lyrics()[0].toMap()["translation"]!="Translated first")return 82;
+  phone.applyMedia({{"title","TEST next phone track"},{"phoneLyrics",""},{"phoneTranslation",""}});if(!phone.phoneLyricRows().isEmpty()||!phone.lyrics().isEmpty())return 83;
+  qInfo()<<"PASS: phone source automatically loads, supplements manual originals without overwriting translation, and clears on track change";
   if(QCoreApplication::arguments().contains("--live")){
    bridge.m_settings.setValue("preferences/lyrics/online",true);bridge.m_settings.setValue("preferences/lyrics/autoMatch",true);
    bridge.m_settings.setValue("preferences/lyrics/preferredProvider","lrclib");

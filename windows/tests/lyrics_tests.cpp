@@ -19,6 +19,12 @@ int main(int argc,char **argv){
  const auto yrc=LyricTimeline::parse("[1000,2000](1000,500,0)TEST (1500,1500,0)YRC");if(yrc.size()!=1||yrc[0].toMap().value("words").toList().size()!=2||yrc[0].toMap().value("text").toString()!="TEST YRC")return 9;
  const auto krc=LyricTimeline::parse("[1000,2000]<0,500,0>TEST <500,1500,0>KRC");if(krc.size()!=1||krc[0].toMap().value("words").toList().last().toMap().value("time").toLongLong()!=1500)return 10;
  const auto qrc=LyricTimeline::parse("[1000,2000]TEST (1000,500)QRC(1500,1500)");if(qrc.size()!=1||qrc[0].toMap().value("text").toString()!="TEST QRC")return 11;
+ auto originals=LyricTimeline::parse("[00:01]<00:01>TEST <00:02>one\n[00:05]TEST two\n[00:09]TEST three");
+ auto extra=LyricTimeline::mergeAuxiliary(originals,"[00:01]Translation one\n[00:05]Translation two\n[00:09]Translation three","translation");
+ auto first=originals[0].toMap();first["translation"]="Manual translation";originals[0]=first;auto second=originals[1].toMap();second["translation"]="Existing translation";originals[1]=second;
+ const auto merged=LyricTimeline::mergeDocumentAuxiliary(originals,extra);
+ if(merged[0].toMap()["translation"]!="Manual translation"||merged[1].toMap()["translation"]!="Existing translation"||merged[2].toMap()["translation"]!="Translation three"||merged[0].toMap()["words"]!=originals[0].toMap()["words"])return 12;
+ auto wrong=extra;for(auto &value:wrong){auto row=value.toMap();row["text"]="DIFFERENT TEST SONG";value=row;}if(LyricTimeline::mergeDocumentAuxiliary(originals,wrong)!=originals)return 13;
  qInfo()<<"PASS: bounded bilingual enhanced-LRC/TTML parsing, seek/backward index, malformed/deep input, untimed fallback";
  return 0;
 }

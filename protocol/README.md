@@ -87,3 +87,5 @@ text or an explicit empty value. Handle the text atomically with snapshot
 identity, preserve manual lyric mappings, and validate before parsing.
 This is optional metadata, not a guarantee of complete lyrics from every
 player, and does not authorize reading notification text or private files.
+
+`phoneTranslation` optionally carries timestamped translation published alongside `phoneLyrics`. Their combined UTF-8 size is limited to 64 KiB. Both fields are sent together when the lyric identity/content changes; absence preserves the current snapshot. Translation alignment is validated against the original timeline before supplementation.

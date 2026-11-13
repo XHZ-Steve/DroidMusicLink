@@ -24,7 +24,10 @@ Item {
             const timeline=findChild(lyricView,"lyricTimeline");tryVerify(function(){return timeline.itemAtIndex(0)!==null})
             const row=timeline.itemAtIndex(0);const layout=glyphPositions(row);const rowHeight=row.height
             controller.currentLine=1;controller.lyricPosition=5100;wait(40)
-            compare(glyphPositions(row),layout);compare(row.height,rowHeight)
+            const inactive=JSON.parse(glyphPositions(row)),active=JSON.parse(layout)
+            compare(inactive.length,active.length)
+            for(let i=0;i<active.length;i++){compare(inactive[i][1],active[i][1]);verify(inactive[i][2]<=active[i][2]+.01)}
+            compare(row.height,rowHeight)
             controller.currentLine=0;controller.lyricPosition=1500;wait(40)
             compare(glyphPositions(row),layout);compare(row.height,rowHeight)
         }

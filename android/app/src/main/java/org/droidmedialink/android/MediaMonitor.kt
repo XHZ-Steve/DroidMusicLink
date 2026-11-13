@@ -181,7 +181,7 @@ class MediaSessionTracker(private val context:Context) {
    val data=JSONObject().put("state","stopped").put("commands",JSONArray(if(canUseSystemKeys())MediaCommands.basic else emptyList<String>()))
    for(key in listOf("title","artist","album","appName","packageName","sessionId","artwork"))data.put(key,"")
    for(key in listOf("durationMs","positionMs","speed","volume","maxVolume"))data.put(key,0)
-   data.put("favorite",false).put("favoriteKnown",false).put("phoneLyrics","")
+   data.put("favorite",false).put("favoriteKnown",false).put("phoneLyrics","").put("phoneTranslation","")
    Hub.media.value=data;Hub.broadcast?.invoke(data);return
   }
   val m=c.metadata;val s=c.playbackState
@@ -204,6 +204,7 @@ class MediaSessionTracker(private val context:Context) {
   data.put("favoriteKnown",rating?.ratingStyle==Rating.RATING_HEART&&rating.isRated)
    .put("favorite",rating?.ratingStyle==Rating.RATING_HEART&&rating.hasHeart())
    .put("phoneLyrics",PhoneLyrics.read(m,runCatching{c.extras}.getOrNull()))
+  data.put("phoneTranslation",PhoneLyrics.translated(data.optString("phoneLyrics")))
   val volume=volumeState(c.playbackInfo);data.put("volume",volume.optInt("volume")).put("maxVolume",volume.optInt("maxVolume"))
   val key="${c.sessionToken.hashCode()}:${data.optString("title")}:${data.optString("artist")}:${data.optString("album")}:${m?.getString(MediaMetadata.METADATA_KEY_ALBUM_ART_URI)}:${m?.getString(MediaMetadata.METADATA_KEY_ART_URI)}:${m?.getString(MediaMetadata.METADATA_KEY_DISPLAY_ICON_URI)}"
   ensureArtwork(c,m,key)

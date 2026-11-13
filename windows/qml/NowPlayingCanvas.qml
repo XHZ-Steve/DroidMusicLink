@@ -34,6 +34,7 @@ Item {
     property var toGeometry: ({})
     property int transitionGeneration: 0
     function rectOf(item){return Qt.rect(item.x,item.y,item.width,item.height)}
+    function blendIn(p){const t=Math.max(0,Math.min(1,p));return t*t*(3-2*t)}
     function formatMix(a,b){return a+(b-a)*(1-Math.pow(1-transitionProgress,3))}
     function protectLyricY(y){return Math.max(y,metadata.y+metadata.height+14-homeLyrics.y)}
     function mix(a,b){return a+(b-a)*transitionProgress}
@@ -86,10 +87,10 @@ Item {
     function beginNextLayout(){freezeGeometry();controller.setSetting("home/layout",(mode+1)%3)}
     function nextLayout(){
         if(focusMotion.running)return
-        if(lyricsMode&&controller.lyrics.length&&motion&&active&&!changingLayout){focusMotion.start();return}
+        if(lyricsMode&&controller.lyrics.length&&motion&&active&&!changingLayout){lyricFocus=0;focusMotion.start();beginNextLayout();return}
         beginNextLayout()
     }
-    NumberAnimation{id:focusMotion;target:canvas;property:"lyricFocus";from:0;to:1;duration:95;easing.type:Easing.InOutCubic;onFinished:canvas.beginNextLayout()}
+    NumberAnimation{id:focusMotion;target:canvas;property:"lyricFocus";from:0;to:1;duration:110;easing.type:Easing.OutCubic}
     onModeChanged:if(ready){if(!active)cancelTransitionForResize();else{if(!changingLayout)freezeGeometry();scheduleTransition()}}
     onArtworkScaleChanged:cancelTransitionForResize()
     onWidthChanged:cancelTransitionForResize()
@@ -187,7 +188,7 @@ Item {
         x:canvas.lyricGeometry.x;y:canvas.lyricGeometry.y;width:canvas.lyricGeometry.width;height:canvas.lyricGeometry.height
         readonly property real expansion:canvas.changingLayout?canvas.mix(canvas.fromGeometry.expansion,canvas.toGeometry.expansion):canvas.lyricsMode?1:0
         readonly property bool expandedSplit:canvas.changingLayout&&canvas.fromGeometry.expansion>.001?canvas.fromGeometry.expandedSplit:canvas.split
-        readonly property bool returning:canvas.lyricFocus>0
+        readonly property bool returning:canvas.lyricFocus>0||focusMotion.running
         readonly property real travel:canvas.changingLayout?canvas.transitionProgress:0
         readonly property real morph:returning?Math.max(0,Math.min(1,(travel-.2)/.8)):1-expansion
         readonly property real primaryX:returning&&canvas.changingLayout?canvas.mix(canvas.fromGeometry.primary.x,compactLyrics.primaryRect.x):0
@@ -205,7 +206,7 @@ Item {
             y:homeLyrics.returning&&canvas.changingLayout?homeLyrics.primaryY-primaryRect.y*scale:0
             controller:canvas.controller;settingsRevision:canvas.settingsRevision;settingsPrefix:"lyrics"
             compact:false;originalFocus:canvas.lyricFocus
-            opacity:homeLyrics.returning&&canvas.changingLayout?0:homeLyrics.expansion;visible:opacity>.001||homeLyrics.returning
+            opacity:homeLyrics.returning&&canvas.changingLayout?1-canvas.blendIn(canvas.transitionProgress/.22):homeLyrics.expansion;visible:opacity>.001||homeLyrics.returning
             transformOrigin:Item.TopLeft
             scale:homeLyrics.sizeRatio+(1-homeLyrics.sizeRatio)*homeLyrics.expansion
             configuration:({alignment:homeLyrics.expandedSplit?canvas.controller.setting("lyrics/alignment","left"):"center",fontSize:canvas.controller.setting("lyrics/fontSize",28)*(homeLyrics.expandedSplit?1:.9)})
@@ -219,7 +220,7 @@ Item {
             x:homeLyrics.returning&&canvas.changingLayout?homeLyrics.primaryX-primaryRect.x*scale:0
             y:homeLyrics.returning&&canvas.changingLayout?homeLyrics.primaryY-primaryRect.y*scale:0
             controller:canvas.controller;settingsRevision:canvas.settingsRevision;settingsPrefix:"lyrics"
-            compact:true;compactLines:1;opacity:homeLyrics.returning?0:1-homeLyrics.expansion;visible:homeLyrics.returning||opacity>.001
+            compact:true;compactLines:1;opacity:homeLyrics.returning?canvas.blendIn((canvas.transitionProgress-.72)/.28):1-homeLyrics.expansion;visible:homeLyrics.returning||opacity>.001
             transformOrigin:Item.TopLeft
             scale:1+(1/homeLyrics.sizeRatio-1)*homeLyrics.expansion
             configuration:({fontSize:canvas.controller.setting("lyrics/fontSize",28)*.85,activeWeight:canvas.controller.setting("lyrics/activeWeight",500),longLine:"elide",alignment:"center",translation:false,romanization:false,autoScroll:true})
@@ -228,6 +229,7 @@ Item {
         }
         Item {
             id:originalMorph;objectName:"originalLyricMorph";anchors.fill:parent
+            opacity:canvas.blendIn(canvas.transitionProgress/.22)*(1-canvas.blendIn((canvas.transitionProgress-.72)/.28))
             visible:homeLyrics.returning&&canvas.changingLayout
             Repeater {
                 model:originalMorph.visible?canvas.fromGeometry.tokens:[]

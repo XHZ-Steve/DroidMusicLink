@@ -35,4 +35,6 @@ int main(int argc,char **argv){QCoreApplication app(argc,argv);QTemporaryDir dir
  bridge.setSetting("lyrics/activeScale",1.);bridge.applyLyricPreset("TEST style");if(qAbs(bridge.setting("lyrics/activeScale").toDouble()-1.18)>.001||qAbs(bridge.setting("desktopLyrics/activeScale").toDouble()-1.02)>.001)return 22;
  bridge.renameLyricPreset("TEST style","TEST renamed");bridge.exportSettings(settingsFile);bridge.deleteLyricPreset("TEST renamed");bridge.importSettings(settingsFile);bridge.setSetting("lyrics/activeScale",1.);bridge.applyLyricPreset("TEST renamed");if(qAbs(bridge.setting("lyrics/activeScale").toDouble()-1.18)>.001)return 23;
  bridge.resetLyricSettings("main");if(bridge.setting("lyrics/activeScale").isValid()||qAbs(bridge.setting("desktopLyrics/activeScale").toDouble()-1.02)>.001)return 24;
+ bridge.setSetting("lyrics/providerPriority","qq,phone,netease,kugou,lrclib");if(bridge.setting("lyrics/providerPriority").toString()!="qq,phone,netease,kugou,lrclib")return 25;
+ bridge.setSetting("lyrics/providerPriority","netease,qq,kugou,lrclib");if(bridge.setting("lyrics/providerPriority").toString()!="phone,netease,qq,kugou,lrclib")return 26;
  qInfo()<<"LRC, word timings, TTML, settings, WSS and warm/cool/complementary/monochrome/pale cover palette checks passed";return 0;}

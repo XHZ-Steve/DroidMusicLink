@@ -99,8 +99,8 @@ inline QVariantList mergeDocumentAuxiliary(const QVariantList &original,const QV
   QVector<AuxiliaryRow> indexed;indexed.reserve(extra.size());
   for(const auto &value:extra){const auto row=value.toMap();indexed.push_back({row.value("time").toLongLong(),normalized(row.value("text").toString()),row});}
   std::stable_sort(indexed.begin(),indexed.end(),[](const auto &a,const auto &b){return a.time<b.time;});
-  QVariantList result=original;int eligible=0,matched=0;
-  for(int i=0;i<original.size();++i){auto row=original[i].toMap();const auto text=normalized(row.value("text").toString());if(text.isEmpty())continue;++eligible;const auto at=row.value("time").toLongLong();auto candidate=std::lower_bound(indexed.begin(),indexed.end(),at-tolerance,[](const auto &entry,qint64 time){return entry.time<time;});for(;candidate!=indexed.end()&&candidate->time<=at+tolerance;++candidate){if(verifyText&&candidate->text!=text)continue;const auto &other=candidate->row;bool added=false;for(const auto &field:QStringList{"translation","romanization"})if(row.value(field).toString().isEmpty()&&!other.value(field).toString().isEmpty()){row[field]=other.value(field);added=true;}if(added){++matched;result[i]=row;}break;}}
- return eligible>0&&matched>=qMin(3,eligible)&&matched>=eligible*.65?result:original;
+  QVariantList result=original;int eligible=0,matched=0,aligned=0;
+  for(int i=0;i<original.size();++i){auto row=original[i].toMap();const auto text=normalized(row.value("text").toString());if(text.isEmpty())continue;++eligible;const auto at=row.value("time").toLongLong();auto candidate=std::lower_bound(indexed.begin(),indexed.end(),at-tolerance,[](const auto &entry,qint64 time){return entry.time<time;});for(;candidate!=indexed.end()&&candidate->time<=at+tolerance;++candidate){if(verifyText&&candidate->text!=text)continue;++aligned;const auto &other=candidate->row;bool added=false;for(const auto &field:QStringList{"translation","romanization"})if(row.value(field).toString().isEmpty()&&!other.value(field).toString().isEmpty()){row[field]=other.value(field);added=true;}if(added){++matched;result[i]=row;}break;}}
+ return eligible>0&&matched>0&&aligned>=qMin(3,eligible)&&aligned>=eligible*.65?result:original;
 }
 }

@@ -140,7 +140,7 @@ private:
  QTimer m_artworkRetry;int m_artworkRetryAttempts=0;
  QTimer m_lyricClock;bool m_uiVisible=true,m_lyricsLoading=false;int m_currentLyricLine=-1;
  QSet<QString> m_lyricSurfaces,m_peerFeatures;
- QVector<qint64> m_lyricTimes;QString m_lyricSource,m_embeddedLyrics,m_embeddedKey;
+ QVector<qint64> m_lyricTimes;QString m_lyricSource,m_embeddedLyrics,m_embeddedTranslation,m_embeddedKey;
  QPointer<QNetworkReply> m_lyricReply,m_lyricSearchReply;
  qint64 m_lyricRetryAfter=0;
  LyricProviders *m_lyricProviders=nullptr;QString m_lyricProvider;double m_lyricMatchScore=0;
@@ -162,6 +162,7 @@ private:
  QString lyricKey() const;void applyTheme();
  QString lyricIdentity() const;void setLyrics(QVariantList rows,QString source);void updateLyricClock();void cancelLyricRequest();
  void requestLyrics(QUrl url,QString key,quint64 generation,bool manual,bool searchFallback=false);
+ QVariantList phoneLyricRows()const;bool phoneLyricsEnabled()const;void supplementCurrentLyrics();
  LyricTrack lyricTrack()const;QStringList lyricProviderOrder()const;
  void tryLyricProviders(QStringList providers,int index,QString key,quint64 generation);
  void tryLyricCandidates(QList<LyricCandidate> candidates,int index,QStringList providers,int nextProvider,QString key,quint64 generation);

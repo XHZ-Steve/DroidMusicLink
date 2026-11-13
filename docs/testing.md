@@ -170,3 +170,7 @@ See `windows-ui-design.md` for the final design, component integration, screensh
 ## Windows lyrics, navigation and native-frame refinement — 2026-11-12
 
 See `windows-refinement-2026-11-12.md` for current integration tests, measured tray latency and resize stress results. Earlier UI reports describe their original build, not this revision.
+
+## Phone lyric source and ui9 interaction regression — 2026-11-13
+
+See [ui9 verification](ui9-phone-lyrics-and-interactions.md) for provider-chain tests, repaired CI assertions, actual packaged runtime evidence and remaining physical-device coverage.
