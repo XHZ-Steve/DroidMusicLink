@@ -12,7 +12,7 @@
 struct CoverArtTrack {QString title,artist,album; qint64 duration=0; QString key()const;};
 struct CoverArtResult {QString path,release,source;QSize pixels;QByteArray digest;bool cached=false;};
 class CoverArtProvider:public QObject {
-public:using Done=std::function<void(QByteArray,QString)>;using QObject::QObject;
+public:using Done=std::function<void(QByteArray,QString,bool)>;using QObject::QObject;
  virtual QString id()const=0;virtual void request(const CoverArtTrack &,int,Done)=0;virtual void cancel()=0;
 };
 class MusicBrainzCoverArtProvider final:public CoverArtProvider {
@@ -20,6 +20,7 @@ class MusicBrainzCoverArtProvider final:public CoverArtProvider {
  void get(QUrl,bool,std::function<void(QByteArray)>);
 public:explicit MusicBrainzCoverArtProvider(QObject *parent=nullptr,QNetworkAccessManager *transport=nullptr):CoverArtProvider(parent){if(transport)network=transport;}
  ~MusicBrainzCoverArtProvider()override{cancel();}
+ std::function<bool(QString,int)> cachedImage;bool bypassCache=false;
  QString id()const override{return "musicbrainz";}
  void request(const CoverArtTrack &,int,Done)override;void cancel()override;
  static QString selectRelease(const CoverArtTrack &,const QJsonObject &);
