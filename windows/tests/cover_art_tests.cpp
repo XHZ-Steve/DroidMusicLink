@@ -42,7 +42,14 @@ int main(int argc,char **argv){
   qInfo()<<"REAL CAA source pixels"<<reference.size()<<"512px resample MSE"<<error/(3.*reference.width()*reference.height())<<"source-native MSE 0";
  }
 
- QObject::connect(&server,&QTcpServer::newConnection,&server,[&]{auto socket=server.nextPendingConnection();QObject::connect(socket,&QTcpSocket::disconnected,socket,&QObject::deleteLater);QObject::connect(socket,&QTcpSocket::readyRead,socket,[&,socket]{auto request=socket->readAll();if(request.isEmpty())return;QByteArray body=request.contains("/ws/2/")?QJsonDocument(activeResponse).toJson():corrupt?QByteArray("BROKEN TEST IMAGE"):png;socket->write("HTTP/1.1 200 OK\r\nContent-Length: "+QByteArray::number(body.size())+"\r\nConnection: close\r\n\r\n"+body);socket->disconnectFromHost();});});
+ QJsonObject netRow{{"id",12345},{"name",track.title},{"duration",track.duration},{"artists",QJsonArray{QJsonObject{{"name",track.artist}}}},{"album",QJsonObject{{"id",67890},{"name",track.album},{"picUrl","https://p1.music.126.net/TEST-netease.jpg"}}}};
+ QJsonObject qqRow{{"songname",track.title},{"interval",track.duration/1000},{"singer",QJsonArray{QJsonObject{{"name",track.artist}}}},{"albumname",track.album},{"albummid","TESTalbum123"}};bool brokenNetEase=false,emptyNetEase=false;
+ QObject::connect(&server,&QTcpServer::newConnection,&server,[&]{auto socket=server.nextPendingConnection();QObject::connect(socket,&QTcpSocket::disconnected,socket,&QObject::deleteLater);QObject::connect(socket,&QTcpSocket::readyRead,socket,[&,socket]{auto request=socket->readAll();if(request.isEmpty())return;QByteArray body=request.contains("/ws/2/")?QJsonDocument(activeResponse).toJson():corrupt?QByteArray("BROKEN TEST IMAGE"):png;
+  if(request.contains("/api/search/"))body=QJsonDocument(QJsonObject{{"result",QJsonObject{{"songs",emptyNetEase?QJsonArray{}:QJsonArray{netRow}}}}}).toJson();
+  if(request.contains("/api/song/detail/"))body=QJsonDocument(QJsonObject{{"songs",QJsonArray{netRow}}}).toJson();
+  if(request.contains("/soso/"))body=QJsonDocument(QJsonObject{{"data",QJsonObject{{"song",QJsonObject{{"list",QJsonArray{qqRow}}}}}}}).toJson();
+  if(brokenNetEase&&request.contains("TEST-netease.jpg"))body="BROKEN TEST IMAGE";
+  socket->write("HTTP/1.1 200 OK\r\nContent-Length: "+QByteArray::number(body.size())+"\r\nConnection: close\r\n\r\n"+body);socket->disconnectFromHost();});});
  FixtureNetwork network;network.port=server.serverPort();CoverArtService service(directory.path(),nullptr,&network);CoverArtResult result;
  auto run=[&](CoverArtTrack t,bool refresh){result={};QEventLoop wait;bool finished=false;service.request(t,1200,refresh,[&](CoverArtResult r){result=r;finished=true;wait.quit();});QTimer::singleShot(5000,&wait,&QEventLoop::quit);if(!finished)wait.exec();return finished;};
  QElapsedTimer clock;clock.start();if(!run(track,false)||result.pixels!=QSize(1200,1200)||result.cached||network.requests!=2)return 5;
@@ -65,6 +72,25 @@ int main(int argc,char **argv){
  originalDone=false;originalUri.request(uriTrack,2048,[&](QByteArray,QString,bool){originalDone=true;});originalUri.cancel();QEventLoop cancelledOriginal;QTimer::singleShot(100,&cancelledOriginal,&QEventLoop::quit);cancelledOriginal.exec();if(originalDone)return 17;
  qInfo()<<"PASS published HTTPS original URI, untrusted origin rejection and stale original callback cancellation";
  service.cancel();qInfo()<<"PASS matching (6 rejection cases), decoding, album/song cache hits, corrupt download fallback and cache clear";
+ for(const auto &bad:QList<CoverArtTrack>{{track.title,"other artist",track.album,track.duration},{track.title,track.artist,"other album",track.duration},{track.title+" (Live)",track.artist,track.album,track.duration},{track.title,track.artist,track.album,track.duration+20000}})if(!CatalogCoverArtProvider::selectCandidate("netease",bad,{netRow}).isEmpty())return 40;
+ auto alternate=netRow;auto altAlbum=alternate["album"].toObject();altAlbum["id"]=67891;alternate["album"]=altAlbum;if(!CatalogCoverArtProvider::selectCandidate("netease",track,{netRow,alternate}).isEmpty())return 41;
+ auto duet=netRow;duet["artists"]=QJsonArray{QJsonObject{{"name","B"}},QJsonObject{{"name","A"}}};auto duetTrack=track;duetTrack.artist="A & B";if(CatalogCoverArtProvider::selectCandidate("netease",duetTrack,{duet}).isEmpty())return 42;
+ if(CatalogCoverArtProvider::trusted("netease",QUrl("https://music.126.net.attacker.invalid/image"),true)||CatalogCoverArtProvider::trusted("qq",QUrl("http://y.gtimg.cn/image"),true)||CatalogCoverArtProvider::trusted("qq",QUrl("https://user:secret@y.gtimg.cn/image"),true))return 43;
+ service.clear();service.setPriority({"netease","qq","musicbrainz"});corrupt=false;
+ if(!run(track,false)||result.source!="netease"||result.release!="netease:67890")return 44;
+ auto afterNetEase=network.requests;if(!run(track,false)||!result.cached||network.requests!=afterNetEase)return 45;
+ service.setPriority({"qq"});if(!run(track,false)||result.source!="qq")return 46;
+ service.clear();service.setPriority({"netease","qq"});brokenNetEase=true;
+ if(!run(track,true)||result.source!="qq")return 47;
+ service.clear();brokenNetEase=false;emptyNetEase=true;if(!run(track,true)||result.source!="qq")return 48;
+ {bool finished=false;QEventLoop wait;service.request(track,1200,true,[&](CoverArtResult r){result=r;finished=true;wait.quit();},1300);QTimer::singleShot(5000,&wait,&QEventLoop::quit);if(!finished)wait.exec();if(!finished||!result.path.isEmpty())return 52;}
+ bool lateCatalog=false;service.request(track,1200,true,[&](CoverArtResult){lateCatalog=true;});service.cancel();{QEventLoop wait;QTimer::singleShot(100,&wait,&QEventLoop::quit);wait.exec();}if(lateCatalog)return 53;
+ service.setPriority({});if(!run(track,false)||!result.path.isEmpty())return 49;
+ qInfo()<<"PASS NetEase/QQ matching, artist credit order, ambiguity, HTTPS guards, source priority, disabled sources, cached replay and corrupt/empty source fallback";
+ if(app.arguments().contains("--live-catalogs")){
+  CoverArtTrack actual{"L.I.F.E.","Remady/Manu-L","L.I.F.E.",179505};CoverArtService live(directory.path()+"/catalog-live");
+  for(const auto &id:QStringList{"netease","qq"}){live.setPriority({id});bool complete=false;QEventLoop wait;CoverArtResult found;live.request(actual,2048,true,[&](CoverArtResult r){found=r;complete=true;wait.quit();},363);QTimer::singleShot(45000,&wait,&QEventLoop::quit);if(!complete)wait.exec();if(!complete||found.path.isEmpty()||found.source!=id){qCritical()<<"LIVE catalogue unavailable or no match"<<id;return 50;}qInfo()<<"LIVE matched catalogue"<<id<<found.release<<found.pixels;complete=false;live.request(actual,2048,false,[&](CoverArtResult r){found=r;complete=true;wait.quit();},363);if(!complete)wait.exec();if(!found.cached)return 51;qInfo()<<"LIVE catalogue cache replay"<<id;}
+ }
  if(app.arguments().contains("--live")){
   CoverArtService live(directory.path()+"/live");CoverArtTrack actual{"The Scientist","Coldplay","A Rush of Blood to the Head",309000};QEventLoop wait;bool completed=false;live.request(actual,1200,false,[&](CoverArtResult r){result=r;completed=true;wait.quit();});QTimer::singleShot(45000,&wait,&QEventLoop::quit);wait.exec();
   if(!completed||result.path.isEmpty()){qWarning()<<"LIVE endpoint unavailable or no unambiguous cover; phone fallback retained";return 20;}

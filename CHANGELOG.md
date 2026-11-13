@@ -2,6 +2,8 @@
 
 ## 1.1.0 preview
 
+- Preview2: experimental NetEase and QQ cover sources, configurable priority/enable switches, conservative catalogue matching, source-separated caches and automatic fallback.
+
 - Optional MusicBrainz/CAA high-resolution covers with conservative matching, asynchronous decode, bounded song/album cache, phone-only fallback and quality settings.
 - Preserve bounded Android original cover pixels, compare local metadata URIs and deduplicate artwork transmission; no Android artwork network fetching.
 - Keep source service limits, rights notices and exact verification limitations in docs/high-resolution-covers.md.

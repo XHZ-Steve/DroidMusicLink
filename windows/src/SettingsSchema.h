@@ -34,10 +34,19 @@ inline QVariantList descriptors(){
  S("info/player","Current player",2,0,"readonly","");
  S("info/playerSelection","Player selection",2,0,"readonly",QCoreApplication::translate("Settings","Select the player in the phone app"));
  action("floating","Floating player",2,1);
- S("cover/mode","Cover quality",2,0,"enum","off",0,1,1,QVariantList{QVariantMap{{"label",QCoreApplication::translate("Settings","Off")},{"value","off"}},QVariantMap{{"label",QCoreApplication::translate("Settings","Automatic enhancement")},{"value","auto"}},QVariantMap{{"label",QCoreApplication::translate("Settings","Prefer high resolution")},{"value","high"}}},false,QCoreApplication::translate("Settings","Online enhancement sends song, artist and album metadata to MusicBrainz. Cover images retain their owners' copyrights."));
+ S("cover/mode","Cover quality",2,0,"enum","off",0,1,1,QVariantList{QVariantMap{{"label",QCoreApplication::translate("Settings","Off")},{"value","off"}},QVariantMap{{"label",QCoreApplication::translate("Settings","Automatic enhancement")},{"value","auto"}},QVariantMap{{"label",QCoreApplication::translate("Settings","Prefer high resolution")},{"value","high"}}},false,QCoreApplication::translate("Settings","Online enhancement sends song, artist and album metadata to the enabled cover sources. Experimental sources may become unavailable. Cover images retain their owners' copyrights."));
  S("cover/phoneOnly","Use phone artwork only",2,0,"bool",false);
  S("cover/resolution","Target cover resolution",2,0,"enum",1200,0,1,1,QVariantList{QVariantMap{{"label","500 px"},{"value",500}},QVariantMap{{"label","1200 px"},{"value",1200}},QVariantMap{{"label","2048 px"},{"value",2048}}});
- S("cover/source","Cover source priority",2,0,"enum","musicbrainz",0,1,1,QVariantList{QVariantMap{{"label","MusicBrainz / CAA"},{"value","musicbrainz"}}});
+ S("cover/source","Cover source priority",2,0,"enum","netease,qq,musicbrainz",0,1,1,QVariantList{
+  QVariantMap{{"label",QCoreApplication::translate("Settings","NetEase → QQ → CAA")},{"value","netease,qq,musicbrainz"}},
+  QVariantMap{{"label",QCoreApplication::translate("Settings","NetEase → CAA → QQ")},{"value","netease,musicbrainz,qq"}},
+  QVariantMap{{"label",QCoreApplication::translate("Settings","QQ → NetEase → CAA")},{"value","qq,netease,musicbrainz"}},
+  QVariantMap{{"label",QCoreApplication::translate("Settings","QQ → CAA → NetEase")},{"value","qq,musicbrainz,netease"}},
+  QVariantMap{{"label",QCoreApplication::translate("Settings","CAA → NetEase → QQ")},{"value","musicbrainz,netease,qq"}},
+  QVariantMap{{"label",QCoreApplication::translate("Settings","CAA → QQ → NetEase")},{"value","musicbrainz,qq,netease"}}});
+ S("cover/providers/netease/enabled","NetEase covers (experimental)",2,0,"bool",true);
+ S("cover/providers/qq/enabled","QQ Music covers (experimental)",2,0,"bool",true);
+ S("cover/providers/musicbrainz/enabled","MusicBrainz / CAA covers",2,0,"bool",true);
  S("cover/cacheMB","Cover cache limit (MB)",5,1,"int",256,32,2048,32);
  action("refreshCoverArt","Refresh high-resolution cover",2,0);{auto row=out.takeLast().toMap();row["buttonLabel"]=QCoreApplication::translate("Settings","Refresh");out<<row;}
  action("clearCoverArtCache","Clear cover cache",5,1);{auto row=out.takeLast().toMap();row["buttonLabel"]=QCoreApplication::translate("Settings","Clear");out<<row;}
@@ -99,6 +108,7 @@ inline QVariantList descriptors(){
 inline QVariantMap descriptor(const QString &key){static const QHash<QString,QVariantMap> index=[]{QHash<QString,QVariantMap> result;for(const auto &row:descriptors()){auto map=row.toMap();result.insert(map["key"].toString(),map);}return result;}();return index.value(key);}
 inline bool normalize(const QString &key,const QVariant &input,QVariant *output){
  auto row=descriptor(key);if(row.isEmpty())return false;const auto type=row["type"].toString();QVariant result=input;
+ if(key=="cover/source"&&input.toString()=="musicbrainz"){if(output)*output="musicbrainz,netease,qq";return true;}
  if(type=="bool"){if(input.metaType().id()==QMetaType::Bool)result=input.toBool();else if(input.toString()=="true"||input.toString()=="false")result=input.toString()=="true";else return false;}
  else if(type=="int"||type=="number"){bool ok=false;double number=input.toDouble(&ok);if(!ok||!std::isfinite(number))return false;number=qBound(row["min"].toDouble(),number,row["max"].toDouble());result=type=="int"?QVariant(qRound(number)):QVariant(number);}
  else if(type=="color"){if(input.toString()=="auto"&&row.value("defaultValue").toString()=="auto"){if(output)*output="auto";return true;}QColor color(input.toString());if(!color.isValid())return false;result=color.name(QColor::HexArgb);}

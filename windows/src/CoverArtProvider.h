@@ -26,14 +26,29 @@ public:explicit MusicBrainzCoverArtProvider(QObject *parent=nullptr,QNetworkAcce
  void request(const CoverArtTrack &,int,Done)override;void cancel()override;
  static QString selectRelease(const CoverArtTrack &,const QJsonObject &);
 };
+// Anonymous public catalogue endpoints; these adapters are experimental.
+class CatalogCoverArtProvider final:public CoverArtProvider {
+ QString source;QNetworkAccessManager ownedNetwork;QNetworkAccessManager *network=&ownedNetwork;QPointer<QNetworkReply> reply;quint64 generation=0;QTimer delay;qint64 nextRequest=0;
+ void get(QUrl,bool,std::function<void(QByteArray)>);
+public:
+ explicit CatalogCoverArtProvider(QString id,QObject *parent=nullptr,QNetworkAccessManager *transport=nullptr):CoverArtProvider(parent),source(id){if(transport)network=transport;}
+ ~CatalogCoverArtProvider()override{cancel();}
+ QString id()const override{return source;}void cancel()override;void request(const CoverArtTrack &,int,Done)override;
+ std::function<bool(QString,int)> cachedImage;bool bypassCache=false;
+ static QJsonObject selectCandidate(QString,const CoverArtTrack &,const QJsonArray &);
+ static bool trusted(QString,QUrl,bool image);
+};
 class CoverArtService:public QObject {
- MusicBrainzCoverArtProvider provider;QString directory,activePath,activeThumbnailPath;quint64 generation=0;std::shared_ptr<std::atomic<quint64>> epoch=std::make_shared<std::atomic<quint64>>(0);qint64 budget=256*1024*1024;QHash<QString,qint64> failures;
+ MusicBrainzCoverArtProvider provider;CatalogCoverArtProvider netease,qq;QStringList priority{"musicbrainz"};QString directory,activePath,activeThumbnailPath;quint64 generation=0;std::shared_ptr<std::atomic<quint64>> epoch=std::make_shared<std::atomic<quint64>>(0);qint64 budget=256*1024*1024;QHash<QString,qint64> failures;
  void decode(QByteArray,const QString &,QString,int,bool,std::function<void(CoverArtResult)>);
+ void fetchAt(CoverArtTrack,int,QString,QString,bool,QStringList,int,std::function<void(CoverArtResult)>,quint64);
  void trim();
+ int minimumPixels=0;
 public:explicit CoverArtService(QString,QObject *parent=nullptr,QNetworkAccessManager *transport=nullptr);
  ~CoverArtService()override{cancel();}
  void cancel();void clear();void setBudget(int mb);qint64 bytes()const;
- void request(CoverArtTrack,int,bool,std::function<void(CoverArtResult)>);
+ void setPriority(QStringList order);
+ void request(CoverArtTrack,int,bool,std::function<void(CoverArtResult)>,int minimum=0);
 };
 
 // A published MediaSession URI is original artwork, not a metadata search.

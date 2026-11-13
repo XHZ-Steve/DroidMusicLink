@@ -37,4 +37,8 @@ int main(int argc,char **argv){QCoreApplication app(argc,argv);QTemporaryDir dir
  bridge.resetLyricSettings("main");if(bridge.setting("lyrics/activeScale").isValid()||qAbs(bridge.setting("desktopLyrics/activeScale").toDouble()-1.02)>.001)return 24;
  bridge.setSetting("lyrics/providerPriority","qq,phone,netease,kugou,lrclib");if(bridge.setting("lyrics/providerPriority").toString()!="qq,phone,netease,kugou,lrclib")return 25;
  bridge.setSetting("lyrics/providerPriority","netease,qq,kugou,lrclib");if(bridge.setting("lyrics/providerPriority").toString()!="phone,netease,qq,kugou,lrclib")return 26;
+ bridge.setSetting("cover/source","musicbrainz");if(bridge.setting("cover/source").toString()!="musicbrainz,netease,qq")return 74;
+ bridge.setSetting("cover/source","qq,netease,musicbrainz");if(bridge.setting("cover/source").toString()!="qq,netease,musicbrainz")return 75;
+ bridge.setSetting("cover/source","unknown,netease,qq");if(bridge.setting("cover/source").toString()!="qq,netease,musicbrainz")return 76;
+ bridge.setSetting("cover/providers/qq/enabled",false);if(bridge.setting("cover/providers/qq/enabled",true).toBool())return 77;
  qInfo()<<"LRC, word timings, TTML, settings, WSS and warm/cool/complementary/monochrome/pale cover palette checks passed";return 0;}

@@ -2075,6 +2075,16 @@
 <message><source>Clear cover cache</source><translation>清理封面缓存</translation></message>
 <message><source>Online enhancement sends song, artist and album metadata to MusicBrainz. Cover images retain their owners' copyrights.</source><translation>联网增强会将歌曲、歌手和专辑信息发送至 MusicBrainz。封面版权归原权利人所有。</translation></message>
 <message><source>Refresh</source><translation>刷新</translation></message>
+    <message><source>NetEase → QQ → CAA</source><translation>网易云 → QQ → CAA</translation></message>
+    <message><source>NetEase → CAA → QQ</source><translation>网易云 → CAA → QQ</translation></message>
+    <message><source>QQ → NetEase → CAA</source><translation>QQ → 网易云 → CAA</translation></message>
+    <message><source>QQ → CAA → NetEase</source><translation>QQ → CAA → 网易云</translation></message>
+    <message><source>CAA → NetEase → QQ</source><translation>CAA → 网易云 → QQ</translation></message>
+    <message><source>CAA → QQ → NetEase</source><translation>CAA → QQ → 网易云</translation></message>
+    <message><source>NetEase covers (experimental)</source><translation>网易云封面（实验性）</translation></message>
+    <message><source>QQ Music covers (experimental)</source><translation>QQ 音乐封面（实验性）</translation></message>
+    <message><source>MusicBrainz / CAA covers</source><translation>MusicBrainz / CAA 封面</translation></message>
+    <message><source>Online enhancement sends song, artist and album metadata to the enabled cover sources. Experimental sources may become unavailable. Cover images retain their owners' copyrights.</source><translation>联网增强会向已启用的封面来源发送歌曲名、艺术家和专辑。实验性来源可能失效，封面版权仍属于原权利人。</translation></message>
 </context>
 <context>
     <name>SettingsPage</name>

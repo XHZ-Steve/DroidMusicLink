@@ -61,3 +61,5 @@ and rerun native frame checks when updating Qt. See `windows/vendor/qwindowkit/U
 ## Optional MusicBrainz / Cover Art Archive services
 
 The cover provider uses the documented [MusicBrainz API](https://musicbrainz.org/doc/MusicBrainz_API) and [Cover Art Archive API](https://musicbrainz.org/doc/Cover_Art_Archive/API). No third-party client code is copied. Cover images are not covered by the MusicBrainz metadata license; copyright stays with the respective owners. API accessibility is not permission for unrestricted image redistribution. Downloaded images are not bundled in the application. See [source rules and verification](docs/high-resolution-covers.md).
+
+NetEase and QQ cover adapters reuse publicly reachable anonymous metadata/image endpoints as experimental compatibility sources, not officially supported SDKs. No client source or third-party library is copied. No account authentication, paid audio, private files or DRM bypass is involved. Artwork retains its owners’ copyrights and is not redistributed with the product. See the source availability, rights limitations and excluded services in docs/high-resolution-covers.md.

@@ -418,10 +418,12 @@ void Bridge::enhanceCover(bool refresh){
  const auto mode=setting("cover/mode","off").toString();
  if(mode=="off"||setting("cover/phoneOnly",false).toBool()){m_pendingCover={};m_coverService->cancel();m_coverRequestKey.clear();if(m_artwork!=m_phoneArtwork){m_enhancedPixels={};m_nativeArtwork=m_phoneNativeArtwork;m_artwork=m_phoneArtwork;m_artworkDigest=m_phoneArtworkDigest;emit changed();updateNative();}return;}
  CoverArtTrack track{title(),artist(),album(),duration()};const int target=setting("cover/resolution",1200).toInt();
- const auto key=track.key()+QString::number(target)+mode;if(!refresh&&m_coverRequestKey==key)return;
+ QStringList priority;for(auto id:setting("cover/source","netease,qq,musicbrainz").toString().split(','))if(setting("cover/providers/"+id+"/enabled",true).toBool())priority<<id;
+ const auto key=track.key()+QString::number(target)+mode+priority.join(',');if(!refresh&&m_coverRequestKey==key)return;
+ m_coverService->setPriority(priority);
  m_coverRequestKey=key;m_coverService->setBudget(setting("cover/cacheMB",256).toInt());
- if(track.title.isEmpty()||track.artist.isEmpty()||track.album.isEmpty()||track.duration<=0||(mode=="auto"&&qMax(m_phonePixels.width(),m_phonePixels.height())>=target))return;
- m_coverService->request(track,target,refresh,[this,key](CoverArtResult result){if(key!=m_coverRequestKey||result.path.isEmpty())return;if(qMin(result.pixels.width(),result.pixels.height())<=qMin(m_phonePixels.width(),m_phonePixels.height()))return;if(m_dragging){m_pendingCover=result;return;}applyEnhancedCover(result);});
+ if(track.title.isEmpty()||track.artist.isEmpty()||track.duration<=0||qMin(m_phonePixels.width(),m_phonePixels.height())>=target)return;
+ m_coverService->request(track,target,refresh,[this,key](CoverArtResult result){if(key!=m_coverRequestKey||result.path.isEmpty())return;if(qMin(result.pixels.width(),result.pixels.height())<=qMin(m_phonePixels.width(),m_phonePixels.height()))return;if(m_dragging){m_pendingCover=result;return;}applyEnhancedCover(result);},qMin(m_phonePixels.width(),m_phonePixels.height()));
 }
 void Bridge::applyEnhancedCover(CoverArtResult result){if(result.path.isEmpty()||qMin(result.pixels.width(),result.pixels.height())<=qMin(m_phonePixels.width(),m_phonePixels.height()))return;if(m_phoneArtwork.isEmpty()){m_coverPalette=result.palette;m_artworkAccent=m_coverPalette.primary.name();}m_enhancedPixels=result.pixels;m_nativeArtwork=result.thumbnailPath.isEmpty()?QString():QUrl::fromLocalFile(result.thumbnailPath).toString();m_artwork=QUrl::fromLocalFile(result.path).toString()+"?v="+QString::fromLatin1(result.digest.toHex().left(16));m_artworkDigest=result.digest;applyTheme();emit changed();updateNative();qInfo()<<"Cover enhancement"<<result.source<<"phone"<<m_phonePixels<<"enhanced"<<result.pixels<<"cache"<<result.cached;}
 
