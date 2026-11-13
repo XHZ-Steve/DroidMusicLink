@@ -27,7 +27,7 @@ internal object PhoneLyrics {
    val json=JSONObject(raw)
    songName=json.optString("songName");artist=json.optString("artist")
    // Documented player-owned lyricInfo payload; absence is normal.
-   validate(json.optString("rawLyric")).ifEmpty{validate(json.optString("lyric"))}
+   if(json.optBoolean("noLyric",false)) "" else validate(json.optString("rawLyric")).ifEmpty{validate(json.optString("lyric"))}
   }.getOrDefault("") else validate(raw)
   return decoded
  }
