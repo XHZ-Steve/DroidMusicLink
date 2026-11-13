@@ -6,6 +6,7 @@
 #include "../tests/UiBindingSmoke.h"
 #include "../tests/NativeChromeSmoke.h"
 #include <QApplication>
+#include <QMessageBox>
 #include <QQmlApplicationEngine>
 #include <QQmlContext>
 #include <QQuickWindow>
@@ -55,7 +56,7 @@ int main(int argc,char **argv){
  if(profileIndex>=0){const auto args=app.arguments();int at=args.indexOf("--preview-media");if(at>=0&&at+1<args.size()){QFile file(args[at+1]);if(file.open(QIODevice::ReadOnly)&&file.size()<=65536)backend.previewMediaForTest(QJsonDocument::fromJson(file.readAll()).object());}at=args.indexOf("--test-layout");if(at>=0&&at+1<args.size())backend.setSetting("home/layout",args[at+1].toInt());}
  if(profileIndex>=0){const auto args=app.arguments();int at=args.indexOf("--preview-cover");if(at>=0&&at+1<args.size())backend.previewCoverForTest(args[at+1]);}
  if(profileIndex>=0){const auto args=app.arguments();int at=args.indexOf("--preview-lyrics");if(at>=0&&at+1<args.size())backend.importLyrics(QUrl::fromLocalFile(QFileInfo(args[at+1]).absoluteFilePath()));}
- QQmlApplicationEngine engine;engine.rootContext()->setContextProperty("backend",&backend);engine.load(QUrl("qrc:/qt/qml/DroidMediaLink/qml/Main.qml"));if(engine.rootObjects().isEmpty())return 1;auto window=qobject_cast<QQuickWindow*>(engine.rootObjects().first());if(!window)return 1;
+ QStringList startupErrors;QQmlApplicationEngine engine;const auto startupWarningConnection=QObject::connect(&engine,&QQmlEngine::warnings,&app,[&startupErrors](const QList<QQmlError>&errors){for(const auto &error:errors)if(startupErrors.size()<32)startupErrors<<error.toString();});engine.rootContext()->setContextProperty("backend",&backend);engine.load(QUrl("qrc:/qt/qml/DroidMediaLink/qml/Main.qml"));QObject::disconnect(startupWarningConnection);if(engine.rootObjects().isEmpty()){QMessageBox::critical(nullptr,"DroidMediaLink",QCoreApplication::translate("Main","The interface could not be loaded.")+"\n\n"+startupErrors.join("\n"));return 1;}auto window=qobject_cast<QQuickWindow*>(engine.rootObjects().first());if(!window)return 1;
  if(auto desktop=window->findChild<QQuickWindow*>("desktop")){desktop->setPersistentGraphics(false);desktop->setPersistentSceneGraph(false);}
  const auto argsForTray=app.arguments();
  const int latencyIndex=argsForTray.indexOf("--tray-latency-smoke");

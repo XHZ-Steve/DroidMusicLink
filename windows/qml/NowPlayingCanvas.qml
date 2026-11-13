@@ -249,7 +249,7 @@ Item {
                     renderType:Text.CurveRendering;renderTypeQuality:104;wrapMode:Text.NoWrap;lineHeight:expandedLyrics.option("lineHeight",1.25)
                     // Blend two cached weights instead of reshaping every word
                     // for a new intermediate QFont on every animation frame.
-                    Text{text:morphWord.text;textFormat:Text.PlainText;font:morphWord.font;font.weight:expandedLyrics.activeWeight;color:morphWord.color;opacity:Math.pow(1-canvas.transitionProgress,3);renderType:Text.CurveRendering;renderTypeQuality:104;lineHeight:expandedLyrics.option("lineHeight",1.25)}
+                    Text{text:morphWord.text;textFormat:Text.PlainText;font.family:morphWord.font.family;font.pixelSize:morphWord.font.pixelSize;font.letterSpacing:morphWord.font.letterSpacing;font.weight:expandedLyrics.activeWeight;color:morphWord.color;opacity:Math.pow(1-canvas.transitionProgress,3);renderType:Text.CurveRendering;renderTypeQuality:104;lineHeight:expandedLyrics.option("lineHeight",1.25)}
                     readonly property real fill:!modelData.timed?1:Math.max(0,Math.min(1,(canvas.controller.lyricPosition-modelData.time)/Math.max(1,modelData.end-modelData.time)))
                     Item{visible:morphWord.fill<1;x:morphWord.width*morphWord.fill;width:morphWord.width*(1-morphWord.fill);height:morphWord.height;clip:true
                         Text{x:-parent.x;text:morphWord.text;textFormat:Text.PlainText;font:morphWord.font;color:expandedLyrics.colorOption("unsungColor",canvas.secondaryColor);renderType:Text.CurveRendering;renderTypeQuality:104;lineHeight:expandedLyrics.option("lineHeight",1.25)}

@@ -9,13 +9,14 @@ Slider {
     property real radius:42
     property color accent:"#b7d9c6"
     property color trackColor:"#38e0e5ff"
+    implicitWidth:160;implicitHeight:radius+8
     padding:0
     readonly property real r:Math.max(.1,Math.min(radius,width/2)-1.5)
     readonly property real span:Math.max(1,width-3)
     readonly property real tip:Math.max(0,Math.min(span,visualPosition*span))
     function edgeY(x){const t=Math.max(0,Math.min(span,x));return 1.5+(t<r?r-Math.sqrt(Math.max(0,r*r-(t-r)*(t-r))):t>span-r?r-Math.sqrt(Math.max(0,r*r-(t-span+r)*(t-span+r))):0)}
     function fraction(x){const t=Math.max(0,Math.min(span,x));const length=Math.PI*r+span-2*r;return (t<r?r*Math.acos((r-t)/r):t>span-r?Math.PI*r/2+span-2*r+r*Math.asin((t-span+r)/r):Math.PI*r/2+t-r)/Math.max(1,length)}
-    containmentMask:QtObject{function contains(point){return point.x>=0&&point.x<=control.width&&Math.abs(point.y-control.edgeY(point.x-1.5))<=9}}
+    containmentMask:QtObject{function contains(p: point): bool {return p.x>=0&&p.x<=control.width&&Math.abs(p.y-control.edgeY(p.x-1.5))<=9}}
     background:Shape {
         width:control.width;height:control.r+1.5
         // Both open ends are at the bottom of this upper-half path. Fade only

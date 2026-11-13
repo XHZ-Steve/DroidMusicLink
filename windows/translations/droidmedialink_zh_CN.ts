@@ -370,6 +370,11 @@
 <context>
     <name>Main</name>
     <message>
+        <source>The interface could not be loaded.</source>
+        <translation>界面加载失败。</translation>
+    </message>
+
+    <message>
         <source>Add to favorites</source>
         <translation>收藏</translation>
     </message>
