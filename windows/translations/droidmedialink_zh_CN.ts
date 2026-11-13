@@ -365,6 +365,15 @@
 <context>
     <name>Main</name>
     <message>
+        <source>Enter fullscreen</source>
+        <translation>进入全屏</translation>
+    </message>
+    <message>
+        <source>Exit fullscreen</source>
+        <translation>退出全屏</translation>
+    </message>
+
+    <message>
         <source>Address</source>
         <translation type="vanished">地址</translation>
     </message>
@@ -2018,6 +2027,11 @@
 </context>
 <context>
     <name>SettingsPage</name>
+    <message>
+        <source>Show advanced options</source>
+        <translation>显示高级参数</translation>
+    </message>
+
     <message>
         <location filename="../qml/SettingsPage.qml" line="49"/>
         <source>General</source>

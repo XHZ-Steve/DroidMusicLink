@@ -97,7 +97,8 @@ Item {
     }
     onInitialGroupChanged: if(componentReady)navigate(initialGroup,0)
     onInitialSectionChanged: if(componentReady)navigate(activeGroup,initialSection)
-    onActiveGroupChanged: if(componentReady)rememberCategory()
+    onActiveGroupChanged:if(componentReady){rememberCategory();if(motion&&visible)categoryMotion.restart()}
+    onVisibleChanged:if(!visible){categoryMotion.stop();contentScroll.opacity=1;categoryOffset.y=0}
     onActiveSectionChanged: {if(activeGroup===4)appearanceScope=scopeFor(activeSection)}
     onAppearanceScopeChanged: {
         if(activeGroup!==4)return
@@ -461,7 +462,7 @@ Item {
             implicitHeight:subgroupRows.implicitHeight*reveal;opacity:reveal;visible:reveal>0;clip:reveal<1
             Behavior on reveal{NumberAnimation{duration:tokens.fast;easing.type:Easing.OutCubic}}
             ColumnLayout {
-                id:subgroupRows;width:parent.width;height:implicitHeight;spacing:3
+                id:subgroupRows;x:14;width:Math.max(0,parent.width-14);height:implicitHeight;spacing:3
                 Repeater{model:page.rowsFor(subgroup.groupIndex,subgroup.sectionIndex).filter(function(row){return row.subgroup===subgroup.subgroupData.key});ParameterRow{required property var modelData;descriptor:modelData;sectionIndex:subgroup.sectionIndex}}
             }
         }
@@ -495,7 +496,7 @@ Item {
             implicitHeight:sectionInner.implicitHeight*reveal;opacity:reveal;visible:reveal>0;clip:reveal<1
             Behavior on reveal{NumberAnimation{duration:tokens.fast;easing.type:Easing.OutCubic}}
             ColumnLayout {
-                id:sectionInner;width:parent.width;height:implicitHeight;spacing:3
+                id:sectionInner;x:16;width:Math.max(0,parent.width-16);height:implicitHeight;spacing:3
                 Loader{Layout.fillWidth:true;active:sectionBlock.groupIndex===1&&(sectionBlock.sectionIndex===0||sectionBlock.sectionIndex===1);sourceComponent:DevicePanel{sectionIndex:sectionBlock.sectionIndex}}
                 Loader{Layout.fillWidth:true;active:sectionBlock.groupIndex===3&&sectionBlock.sectionIndex===0;sourceComponent:ProviderPanel{}}
                 Loader{Layout.fillWidth:true;active:sectionBlock.groupIndex===3&&sectionBlock.sectionIndex===6;sourceComponent:LyricPresetsPanel{}}
@@ -505,7 +506,7 @@ Item {
                 Repeater {model:sectionBlock.appearance?page.parameterDescriptors(sectionBlock.sectionIndex,sectionBlock.advanced):[];ParameterRow{required property var modelData;descriptor:modelData;appearance:true;sectionIndex:sectionBlock.sectionIndex;scope:page.scopeFor(sectionBlock.sectionIndex)}}
                 RowLayout {
                     visible:sectionBlock.hasAdvanced;Layout.fillWidth:true;Layout.topMargin:4
-                    FlatButton{objectName:"advancedOptions-"+sectionBlock.groupIndex+"/"+sectionBlock.sectionIndex;text:sectionBlock.advanced?qsTr("Hide advanced options"):qsTr("Advanced options");checked:sectionBlock.advanced;onClicked:{page.activeSection=sectionBlock.sectionIndex;page.setAdvanced(sectionBlock.groupIndex,sectionBlock.sectionIndex,!sectionBlock.advanced)}}
+                    FlatButton{objectName:"advancedOptions-"+sectionBlock.groupIndex+"/"+sectionBlock.sectionIndex;text:sectionBlock.advanced?qsTr("Hide advanced options"):qsTr("Show advanced options");checked:sectionBlock.advanced;onClicked:{page.activeSection=sectionBlock.sectionIndex;page.setAdvanced(sectionBlock.groupIndex,sectionBlock.sectionIndex,!sectionBlock.advanced)}}
                     Item{Layout.fillWidth:true}
                 }
             }
@@ -553,7 +554,8 @@ Item {
             }
         }
         ScrollView {
-            id:contentScroll;objectName:"settingsScroll";visible:!resultsScroll.visible;Layout.fillWidth:true;Layout.fillHeight:true;clip:true;contentWidth:availableWidth
+            id:contentScroll;objectName:"settingsScroll";transform:Translate{id:categoryOffset}
+            visible:!resultsScroll.visible;Layout.fillWidth:true;Layout.fillHeight:true;clip:true;contentWidth:availableWidth
             ScrollBar.vertical:ScrollBar{policy:ScrollBar.AsNeeded;contentItem:Rectangle{implicitWidth:5;radius:3;color:tokens.secondaryText;opacity:.45}}
             ColumnLayout {
                 id:contentColumn;width:contentScroll.availableWidth-12;spacing:10
@@ -561,6 +563,11 @@ Item {
                 Item{Layout.fillWidth:true;implicitHeight:20}
             }
         }
+    }
+    ParallelAnimation {
+        id:categoryMotion
+        NumberAnimation{target:contentScroll;property:"opacity";from:0;to:1;duration:170;easing.type:Easing.OutCubic}
+        NumberAnimation{target:categoryOffset;property:"y";from:10;to:0;duration:210;easing.type:Easing.OutCubic}
     }
     Dialog {
         id:resetDialog;title:qsTr("Restore defaults?");modal:true;anchors.centerIn:Overlay.overlay;width:Math.min(420,page.width-24)

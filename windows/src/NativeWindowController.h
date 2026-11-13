@@ -17,6 +17,7 @@ class NativeWindowController : public QObject, public QQmlParserStatus, public Q
  Q_PROPERTY(QQuickItem* maximizeButton MEMBER m_maximizeButton NOTIFY configurationChanged)
  Q_PROPERTY(QQuickItem* closeButton MEMBER m_closeButton NOTIFY configurationChanged)
  Q_PROPERTY(bool pointerInTitleBar READ pointerInTitleBar NOTIFY pointerChanged)
+ Q_PROPERTY(bool pointerNearLeftControl READ pointerNearLeftControl NOTIFY pointerChanged)
  Q_PROPERTY(bool pointerNearControls READ pointerNearControls NOTIFY pointerChanged)
  Q_PROPERTY(bool foregroundFullscreen READ foregroundFullscreen NOTIFY foregroundChanged)
  Q_PROPERTY(bool maximized READ maximized NOTIFY stateChanged)
@@ -29,6 +30,7 @@ public:
  bool foregroundFullscreen() const {return m_foregroundFullscreen;}
  void refreshForeground();
  bool pointerInTitleBar() const {return m_pointerInTitleBar;}
+ bool pointerNearLeftControl() const {return m_pointerNearLeftControl;}
  bool pointerNearControls() const {return m_pointerNearControls;}
  bool nativeEventFilter(const QByteArray &eventType,void *message,qintptr *result) override;
  void classBegin() override {}
@@ -38,6 +40,7 @@ public:
  Q_INVOKABLE void close();
  Q_INVOKABLE void setHitTestVisible(QQuickItem *item, bool visible=true);
 signals:
+ void aboutToQuit();
  void configurationChanged();
  void stateChanged();
  void pointerChanged();
@@ -47,7 +50,7 @@ private:
  QPointer<QQuickWindow> m_window;
  QPointer<QQuickItem> m_titleBar,m_minimizeButton,m_maximizeButton,m_closeButton;
  QWK::QuickWindowAgent *m_agent=nullptr;
- bool m_complete=false,m_pointerInTitleBar=false,m_pointerNearControls=false;
+ bool m_complete=false,m_pointerInTitleBar=false,m_pointerNearControls=false,m_pointerNearLeftControl=false;
  bool m_foregroundFullscreen=false;
  void *m_foregroundHook=nullptr,*m_locationHook=nullptr;
  void updatePointer(bool inside);

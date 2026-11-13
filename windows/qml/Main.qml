@@ -43,7 +43,17 @@ ApplicationWindow {
     property bool chromeRevealed:!autoHideControls||mainChrome.pointerInTitleBar||minimizeControl.visualFocus||maximizeControl.visualFocus||closeControl.visualFocus
     property bool gearRevealed:!autoHideControls||mainChrome.pointerNearControls||settingsGear.hovered||settingsGear.visualFocus
     function material(scope){var revision=root.settingsRevision;return backend.appearanceConfig(scope)}
-    function openSettings(group,section){root.page=2;settingsPage.navigate(group===undefined?0:group,section===undefined?0:section)}
+    property int pendingPage:0
+    property bool restoreMaximizedAfterFullscreen:false
+    function toggleFullscreen(){if(visibility===Window.FullScreen){if(restoreMaximizedAfterFullscreen)showMaximized();else showNormal()}else{restoreMaximizedAfterFullscreen=visibility===Window.Maximized;showFullScreen()}}
+    function changePage(next){
+        pendingPage=next
+        if(next===page&&!pageMotion.running)return
+        pageMotion.stop()
+        if(!motion||!visible){page=next;pageStack.opacity=1;pageOffset.y=0;return}
+        pageMotion.start()
+    }
+    function openSettings(group,section){root.changePage(2);settingsPage.navigate(group===undefined?0:group,section===undefined?0:section)}
     onPageChanged:if(page===1)openSettings(1,0)
     function save(key, value) { backend.setSetting(key, value) }
     function time(ms) { var s = Math.max(0, Math.floor(ms/1000)); return Math.floor(s/60)+":"+(s%60<10?"0":"")+(s%60) }
@@ -171,6 +181,8 @@ ApplicationWindow {
         id:canvasLayout
         anchors.fill:parent;anchors.leftMargin:root.canvasMargin;anchors.rightMargin:root.canvasMargin;anchors.topMargin:root.page===0?Math.max(40,root.canvasMargin):48;anchors.bottomMargin:root.page===0?Math.max(28,root.canvasMargin*.65):32;spacing:28
         StackLayout {
+            id:pageStack;transform:Translate{id:pageOffset}
+            enabled:!pageMotion.running
             currentIndex:root.page===0?0:1;Layout.fillWidth:true;Layout.fillHeight:true
             NowPlayingCanvas {
                 id:homePage;controller:backend;settingsRevision:root.settingsRevision
@@ -182,7 +194,7 @@ ApplicationWindow {
             }
             SettingsPage {
                 id:settingsPage;objectName:"settingsPage";materialSource:ambient;controller:backend;settingsRevision:root.settingsRevision;light:root.light;motion:root.motion;accent:root.accent;textColor:root.fg
-                onCloseRequested:root.page=0
+                onCloseRequested:root.changePage(0)
                 onDesktopLyricsRequested:desktop.toggleRequested()
                 onFloatingRequested:floating.visible=!floating.visible
                 onImportLyricsRequested:lyricFile.open()
@@ -193,7 +205,7 @@ ApplicationWindow {
             }
         }
         GlassMaterial {
-            id:playbackDock;objectName:"playbackDock";property bool capsule:root.pref("dock/shape","rounded")==="capsule";configuration:capsule?Object.assign({},root.material("dock"),{glassRadius:height/2}):root.material("dock");motion:root.motion
+            id:playbackDock;opacity:pageStack.opacity;objectName:"playbackDock";property bool capsule:root.pref("dock/shape","rounded")==="capsule";configuration:capsule?Object.assign({},root.material("dock"),{glassRadius:height/2}):root.material("dock");motion:root.motion
             Layout.alignment:Qt.AlignHCenter;Layout.preferredWidth:Math.min(660,canvasLayout.width);implicitHeight:capsule?84:100;visible:root.page===0
             sourceItem:ambient;glassEnabled:root.liquidStyle;cornerRadius:design.dockRadius;dark:!root.light;active:root.visible&&root.visibility!==Window.Minimized&&visible;backdropColor:root.bg;tintColor:design.elevated;tintStrength:root.light?.10+root.glass*.44:.04+root.glass*.25;fallbackColor:design.surface
             CapsuleProgress {
@@ -222,6 +234,15 @@ ApplicationWindow {
                     }
                 }
             }
+        }
+    }
+    SequentialAnimation {
+        id:pageMotion
+        NumberAnimation{target:pageStack;property:"opacity";to:0;duration:90;easing.type:Easing.OutCubic}
+        ScriptAction{script:{root.page=root.pendingPage;pageOffset.y=root.page===0?-10:12}}
+        ParallelAnimation{
+            NumberAnimation{target:pageStack;property:"opacity";to:1;duration:190;easing.type:Easing.OutCubic}
+            NumberAnimation{target:pageOffset;property:"y";to:0;duration:230;easing.type:Easing.OutCubic}
         }
     }
     AppDialog {
@@ -258,17 +279,26 @@ ApplicationWindow {
     AppDialog { id: clearCache; title:qsTr("Delete cached lyrics?");anchors.centerIn:parent;modal:true;standardButtons:Dialog.Ok|Dialog.Cancel;onAccepted:backend.clearLyricsCache() }
     AppDialog { id: revoke; title:qsTr("Forget device?"); anchors.centerIn: parent; modal:true; standardButtons:Dialog.Ok|Dialog.Cancel; Label { text:qsTr("Saved credentials will be removed. Pair again to reconnect."); wrapMode:Text.Wrap; width:300 } onAccepted:backend.forgetDevice(root.selectedDeviceUrl) }
     Window {
-        id: floating; objectName:"floating"; onVisibleChanged: backend.setUiVisible((root.visible&&root.visibility!==Window.Minimized) || desktop.visible || floating.visible || trayWindow.visible); width:390; height:180; minimumWidth:280;minimumHeight:160; visible:false; title:qsTr("Floating player"); color:"transparent"; flags:Qt.Tool|Qt.FramelessWindowHint|Qt.NoDropShadowWindowHint|(root.overlayTopmost?Qt.WindowStaysOnTopHint:0)
-        x:root.pref("floatX",100); y:root.pref("floatY",100)
-        onXChanged: if(visible)root.save("floatX",x); onYChanged:if(visible)root.save("floatY",y)
+        id: floating; objectName:"floating"; onVisibleChanged:{backend.setUiVisible((root.visible&&root.visibility!==Window.Minimized)||desktop.visible||floating.visible||trayWindow.visible);if(!visible&&floatingPositionSave.running)persistPosition()} width:390; height:180; minimumWidth:280;minimumHeight:160; visible:false; title:qsTr("Floating player"); color:"transparent"; flags:Qt.Tool|Qt.FramelessWindowHint|Qt.NoDropShadowWindowHint|(root.overlayTopmost?Qt.WindowStaysOnTopHint:0)
+        property bool positionReady:false
+        Component.onCompleted:{x=Number(backend.setting("floatX",100));y=Number(backend.setting("floatY",100));positionReady=true}
+        function persistPosition(){if(!positionReady)return;floatingPositionSave.stop();const px=x,py=y;root.save("floatX",px);root.save("floatY",py)}
+        onXChanged:if(positionReady&&visible)floatingPositionSave.restart()
+        onYChanged:if(positionReady&&visible)floatingPositionSave.restart()
+        Timer{id:floatingPositionSave;interval:350;onTriggered:if(!floatingDrag.active)floating.persistPosition();else restart()}
+        Connections{target:mainChrome;function onAboutToQuit(){if(floatingPositionSave.running)floating.persistPosition()}}
         AmbientScene{id:floatingBackdrop;anchors.fill:parent;visible:false}
         GlassMaterial{opacity:root.highContrast?1:.72;configuration:root.material("floating");motion:root.motion;anchors.fill:parent;sourceItem:floatingBackdrop;glassEnabled:root.liquidStyle;cornerRadius:design.floatingRadius;active:floating.visible;dark:!root.light;backdropColor:root.bg;tintColor:design.elevated;tintStrength:root.light?.10+root.glass*.44:.04+root.glass*.25;fallbackColor:design.elevated}
-        MouseArea{anchors.left:parent.left;anchors.right:parent.right;anchors.top:parent.top;height:48;onPressed:floating.startSystemMove()}
+        Item{anchors.left:parent.left;anchors.right:parent.right;anchors.top:parent.top;anchors.margins:6;anchors.rightMargin:44;height:64;z:1
+            HoverHandler{cursorShape:floatingDrag.active?Qt.ClosedHandCursor:Qt.OpenHandCursor}
+            DragHandler{id:floatingDrag;target:null;acceptedButtons:Qt.LeftButton;onActiveChanged:if(active)floating.startSystemMove();else if(floating.positionReady)floatingPositionSave.restart()}
+        }
         ColumnLayout { anchors.fill:parent; anchors.margins:20; Label { textFormat:Text.PlainText; text:backend.title||qsTr("No media"); color:fg; font.pixelSize:20; elide:Text.ElideRight; Layout.fillWidth:true;Layout.rightMargin:24 } Caption { text:backend.artist;Layout.fillWidth:true;elide:Text.ElideRight } Transport { backdrop:floatingBackdrop;Layout.alignment:Qt.AlignHCenter } }
-        Action{anchors.top:parent.top;anchors.right:parent.right;anchors.margins:8;implicitWidth:28;implicitHeight:28;iconName:"x";text:qsTr("Close");onClicked:floating.hide()}
+        Action{z:2;anchors.top:parent.top;anchors.right:parent.right;anchors.margins:8;implicitWidth:28;implicitHeight:28;iconName:"x";text:qsTr("Close");onClicked:floating.hide()}
         Repeater{model:[Qt.LeftEdge,Qt.RightEdge,Qt.TopEdge,Qt.BottomEdge,Qt.LeftEdge|Qt.TopEdge,Qt.RightEdge|Qt.TopEdge,Qt.LeftEdge|Qt.BottomEdge,Qt.RightEdge|Qt.BottomEdge]
             MouseArea{
                 required property int modelData
+                z:3
                 readonly property bool atLeft:(modelData&Qt.LeftEdge)!==0;readonly property bool atRight:(modelData&Qt.RightEdge)!==0
                 readonly property bool atTop:(modelData&Qt.TopEdge)!==0;readonly property bool atBottom:(modelData&Qt.BottomEdge)!==0
                 x:atLeft?0:atRight?floating.width-6:6;y:atTop?0:atBottom?floating.height-6:6
@@ -319,9 +349,16 @@ ApplicationWindow {
     }
 
     NativeFrame.NativeWindowController{id:mainChrome;objectName:"mainChrome";window:root;titleBar:titleDragRegion;minimizeButton:minimizeControl;maximizeButton:maximizeControl;closeButton:closeControl
-        Component.onCompleted:setHitTestVisible(settingsGear,true)
+        Component.onCompleted:{setHitTestVisible(settingsGear,true);setHitTestVisible(fullscreenControl,true)}
     }
     Item{id:titleDragRegion;objectName:"titleDragRegion";anchors.top:parent.top;anchors.left:parent.left;anchors.right:parent.right;height:44;z:50
+        Action{id:fullscreenControl;objectName:"fullscreenControl";anchors.left:parent.left;anchors.leftMargin:8;anchors.top:parent.top;anchors.topMargin:4;implicitWidth:36;implicitHeight:32
+            visible:root.page===0;enabled:visible
+            text:root.visibility===Window.FullScreen?qsTr("Exit fullscreen"):qsTr("Enter fullscreen");iconName:root.visibility===Window.FullScreen?"minimize":"fullscreen"
+            opacity:mainChrome.pointerNearLeftControl||hovered||visualFocus?1:0
+            Behavior on opacity{NumberAnimation{duration:design.fast}}
+            onClicked:root.toggleFullscreen()
+        }
         RowLayout{id:captionControls;anchors.top:parent.top;anchors.right:parent.right;anchors.margins:4;spacing:2;opacity:root.chromeRevealed?1:0
             Behavior on opacity{NumberAnimation{duration:design.fast}}
             WindowButton{id:minimizeControl;objectName:"minimizeControl";text:qsTr("Minimize");iconName:"minus";onClicked:mainChrome.minimize()}
@@ -332,6 +369,8 @@ ApplicationWindow {
             Behavior on opacity{NumberAnimation{duration:design.fast}}
         }
     }
+    Shortcut{sequence:"F11";onActivated:root.toggleFullscreen()}
+    Shortcut{sequence:"Escape";enabled:root.visibility===Window.FullScreen;onActivated:root.toggleFullscreen()}
     Shortcut{sequence:root.pref("shortcut/settings","Ctrl+,");onActivated:root.openSettings(0,0)}
     Shortcut{sequence:root.pref("shortcut/devices","Ctrl+Shift+D");onActivated:root.openSettings(1,0)}
     Shortcut{sequence:root.pref("shortcut/desktop","Ctrl+Shift+L");onActivated:desktop.toggleRequested()}

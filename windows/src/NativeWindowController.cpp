@@ -22,6 +22,7 @@ void NativeWindowController::refreshForeground(){
  if(fullscreen!=m_foregroundFullscreen){m_foregroundFullscreen=fullscreen;emit foregroundChanged();}
 }
 NativeWindowController::NativeWindowController(QObject *parent):QObject(parent) {
+ if(QCoreApplication::instance())connect(QCoreApplication::instance(),&QCoreApplication::aboutToQuit,this,&NativeWindowController::aboutToQuit);
  connect(this,&NativeWindowController::configurationChanged,this,&NativeWindowController::configure);
 }
 NativeWindowController::~NativeWindowController(){if(m_foregroundHook)UnhookWinEvent(static_cast<HWINEVENTHOOK>(m_foregroundHook));if(m_locationHook)UnhookWinEvent(static_cast<HWINEVENTHOOK>(m_locationHook));if(QCoreApplication::instance())QCoreApplication::instance()->removeNativeEventFilter(this);}
@@ -60,6 +61,7 @@ void NativeWindowController::close(){if(m_window)m_window->close();}
 void NativeWindowController::setHitTestVisible(QQuickItem *item,bool visible){configure();if(m_agent&&item)m_agent->setHitTestVisible(item,visible);}
 
 void NativeWindowController::updatePointer(bool inside){
+ if(!inside&&m_pointerNearLeftControl){m_pointerNearLeftControl=false;emit pointerChanged();}
  if(!inside&&m_pointerNearControls){m_pointerNearControls=false;emit pointerChanged();}
  if(m_pointerInTitleBar==inside)return;
  m_pointerInTitleBar=inside;emit pointerChanged();
@@ -83,6 +85,8 @@ bool NativeWindowController::nativeEventFilter(const QByteArray &,void *message,
  }
  const auto ratio=m_window->devicePixelRatio();
  const auto local=m_titleBar->mapFromScene(QPointF(point.x/ratio,point.y/ratio));
+ const bool leftNearby=m_titleBar->contains(local)&&local.x()<=76;
+ if(leftNearby!=m_pointerNearLeftControl){m_pointerNearLeftControl=leftNearby;emit pointerChanged();}
  const bool controlsNearby=m_titleBar->contains(local)&&local.x()>=m_titleBar->width()-250;
  if(controlsNearby!=m_pointerNearControls){m_pointerNearControls=controlsNearby;emit pointerChanged();}
  updatePointer(m_window->isVisible()&&m_titleBar->isVisible()&&m_titleBar->contains(local));
