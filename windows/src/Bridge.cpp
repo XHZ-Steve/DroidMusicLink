@@ -450,7 +450,7 @@ QVariantList Bridge::coverProviders()const{
  }return rows;
 }
 QString Bridge::coverSource()const{
- const auto size=m_enhancedPixels.isEmpty()?m_phonePixels:m_enhancedPixels;
+ const auto size=m_coverSource.isEmpty()||m_enhancedPixels.isEmpty()?m_phonePixels:m_enhancedPixels;
  QString name=tr("Phone artwork");for(auto value:coverProviders()){auto row=value.toMap();if(row["id"]==m_coverSource&&!m_enhancedPixels.isEmpty())name=row["name"].toString();}
  return size.isEmpty()?name:tr("%1 · %2×%3").arg(name).arg(size.width()).arg(size.height());
 }
