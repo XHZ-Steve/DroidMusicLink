@@ -36,6 +36,7 @@ inline QVariantList descriptors(){
  S("media/smtc","System media controls",2,2,"bool",true);
  S("info/volume","Phone volume",2,3,"readonly","");
  S("lyrics/online","Online lyrics",3,0,"bool",true);
+ S("lyrics/phoneSource","Phone lyrics",3,0,"enum","prefer",0,1,1,QVariantList{QVariantMap{{"label",QCoreApplication::translate("Settings","Prefer phone lyrics")},{"value","prefer"}},QVariantMap{{"label",QCoreApplication::translate("Settings","Phone lyrics only")},{"value","only"}},QVariantMap{{"label",QCoreApplication::translate("Settings","Off")},{"value","off"}}},false,QCoreApplication::translate("Settings","Uses complete lyric text published by the player. Availability depends on the player; no private app files are read."));
  S("lyrics/providerPriority","Provider priority",3,0,"providerOrder","netease,qq,kugou,lrclib");
  S("lyrics/preferredProvider","Preferred lyric source",3,0,"enum","auto",0,1,1,options({"auto","netease","qq","kugou","lrclib"}));
  S("lyrics/preferCurrentApp","Prefer current player source",3,0,"bool",true);

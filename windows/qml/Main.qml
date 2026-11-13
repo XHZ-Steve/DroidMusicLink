@@ -53,7 +53,7 @@ ApplicationWindow {
         if(!motion||!visible){page=next;pageStack.opacity=1;pageOffset.y=0;return}
         pageMotion.start()
     }
-    function openSettings(group,section){root.changePage(2);settingsPage.navigate(group===undefined?0:group,section===undefined?0:section)}
+    function openSettings(group,section){settingsPage.prepare(group===undefined?0:group);root.changePage(2);settingsPage.navigate(group===undefined?0:group,section===undefined?0:section)}
     onPageChanged:if(page===1)openSettings(1,0)
     function save(key, value) { backend.setSetting(key, value) }
     function time(ms) { var s = Math.max(0, Math.floor(ms/1000)); return Math.floor(s/60)+":"+(s%60<10?"0":"")+(s%60) }
@@ -83,7 +83,7 @@ ApplicationWindow {
             border.width:a.visualFocus?2:0;border.color:root.accent
             Behavior on color {ColorAnimation{duration:design.fast}}
         }
-        contentItem:Text {text:a.iconName?Icons.glyph(a.iconName):a.text;font.family:a.iconName?lucide.name:root.font.family;font.pixelSize:a.iconName?20:design.body;font.weight:a.primary?Font.DemiBold:Font.Medium;color:a.primary?design.accentText:root.fg;opacity:a.enabled?1:.35;horizontalAlignment:Text.AlignHCenter;verticalAlignment:Text.AlignVCenter}
+        contentItem:Text {text:a.iconName?Icons.glyph(a.iconName):a.text;font.family:a.iconName?lucide.name:root.font.family;font.pixelSize:a.iconName?20:design.body;font.weight:a.primary?Font.DemiBold:Font.Medium;color:a.primary?design.accentText:a.checked?root.accent:root.fg;opacity:a.enabled?1:.35;horizontalAlignment:Text.AlignHCenter;verticalAlignment:Text.AlignVCenter}
         ToolTip.visible:iconName.length>0&&hovered;ToolTip.delay:650;ToolTip.text:text
     }
     component WindowButton: Button {
@@ -223,7 +223,8 @@ ApplicationWindow {
                 RowLayout {Layout.fillWidth:true;Layout.fillHeight:true;spacing:0
                     Item{Layout.fillWidth:true;Layout.preferredWidth:1;implicitHeight:48
                         Action{id:dockLyricsControl;anchors.left:parent.left;anchors.verticalCenter:parent.verticalCenter;text:qsTr("Desktop lyrics");iconName:"captions";checked:desktop.requestedVisible;onClicked:desktop.toggleRequested()}
-                        Caption{visible:playbackDock.capsule;anchors.left:dockLyricsControl.right;anchors.leftMargin:6;anchors.verticalCenter:parent.verticalCenter;text:root.time(backend.position)}
+                        Action{id:favoriteButton;objectName:"favoriteButton";anchors.left:dockLyricsControl.right;anchors.leftMargin:2;anchors.verticalCenter:parent.verticalCenter;visible:root.supports("favorite");enabled:visible;iconName:"heart";checked:backend.favorited;text:backend.favoriteKnown&&backend.favorited?qsTr("Remove from favorites"):qsTr("Add to favorites");onClicked:backend.command("favorite",backend.favoriteKnown&&backend.favorited?0:1)}
+                        Caption{visible:playbackDock.capsule;anchors.left:favoriteButton.visible?favoriteButton.right:dockLyricsControl.right;anchors.leftMargin:6;anchors.verticalCenter:parent.verticalCenter;text:root.time(backend.position)}
                     }
                     Transport{}
                     Item{Layout.fillWidth:true;Layout.preferredWidth:1;implicitHeight:48
@@ -365,7 +366,7 @@ ApplicationWindow {
             WindowButton{id:maximizeControl;objectName:"maximizeControl";text:mainChrome.maximized?qsTr("Restore"):qsTr("Maximize");iconName:mainChrome.maximized?"copy":"square";onClicked:mainChrome.toggleMaximized()}
             WindowButton{id:closeControl;objectName:"closeControl";text:qsTr("Close");iconName:"x";onClicked:mainChrome.close()}
         }
-        Action{id:settingsGear;objectName:"settingsGear";anchors.right:captionControls.left;anchors.rightMargin:8;anchors.top:parent.top;anchors.topMargin:4;implicitHeight:36;text:qsTr("Settings");iconName:"settings";opacity:root.gearRevealed?1:0;onClicked:root.openSettings(0,0)
+        Action{id:settingsGear;objectName:"settingsGear";anchors.right:captionControls.left;anchors.rightMargin:8;anchors.top:parent.top;anchors.topMargin:4;implicitHeight:36;text:qsTr("Settings");iconName:"settings";opacity:root.gearRevealed?1:0;onHoveredChanged:if(hovered)settingsPage.prepare(0);onClicked:root.openSettings(0,0)
             Behavior on opacity{NumberAnimation{duration:design.fast}}
         }
     }

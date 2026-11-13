@@ -127,6 +127,11 @@
 <context>
     <name>Bridge</name>
     <message>
+        <source>Track changed; try again</source>
+        <translation>歌曲已切换，请重试</translation>
+    </message>
+
+    <message>
         <location filename="../src/Bridge.cpp" line="64"/>
         <location filename="../src/Bridge.cpp" line="116"/>
         <source>Authenticating</source>
@@ -364,6 +369,15 @@
 </context>
 <context>
     <name>Main</name>
+    <message>
+        <source>Add to favorites</source>
+        <translation>收藏</translation>
+    </message>
+    <message>
+        <source>Remove from favorites</source>
+        <translation>取消收藏</translation>
+    </message>
+
     <message>
         <source>Enter fullscreen</source>
         <translation>进入全屏</translation>
@@ -808,6 +822,27 @@
 </context>
 <context>
     <name>Settings</name>
+    <message>
+        <source>Phone lyrics</source>
+        <translation>手机歌词</translation>
+    </message>
+    <message>
+        <source>Prefer phone lyrics</source>
+        <translation>优先手机歌词</translation>
+    </message>
+    <message>
+        <source>Phone lyrics only</source>
+        <translation>仅手机歌词</translation>
+    </message>
+    <message>
+        <source>Off</source>
+        <translation>关闭</translation>
+    </message>
+    <message>
+        <source>Uses complete lyric text published by the player. Availability depends on the player; no private app files are read.</source>
+        <translation>读取播放器公开的完整歌词文本，能否获取取决于播放器，不读取应用私有文件。</translation>
+    </message>
+
     <message>
         <source>Home artwork scale</source>
         <translation>主页封面比例</translation>

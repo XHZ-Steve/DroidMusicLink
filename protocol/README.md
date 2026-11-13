@@ -68,3 +68,22 @@ a `capabilities` payload's `features` array. The PC responds with its supported
 features. Volume deltas are used only for peers that advertise support; older
 PCs receive full snapshots with a fresh playback anchor. Cover snapshot retries
 are requested only when the phone advertises `get_snapshot`.
+
+## Optional player-owned favorites and lyrics
+
+A phone may advertise the exact `favorite` command only for a session exposing
+Android `ACTION_SET_RATING` with heart ratings. The command's `value` is 1 to
+favorite or 0 to remove the heart, with `sessionId`, `title`, `artist`, and
+`album` copied from the current snapshot. Android revalidates that identity
+against the live session before dispatch. `favoriteKnown` and `favorite` in
+snapshots reflect the player's actual `USER_RATING`; acknowledgement alone
+must not optimistically change favorite state.
+
+Snapshots may carry `phoneLyrics`, a bounded string (64 KiB UTF-8 in the
+implementation) from player-published metadata. The first snapshot always
+includes the field, including an empty value; subsequent snapshots may omit
+it when unchanged for the same session/track. A track change includes the new
+text or an explicit empty value. Handle the text atomically with snapshot
+identity, preserve manual lyric mappings, and validate before parsing.
+This is optional metadata, not a guarantee of complete lyrics from every
+player, and does not authorize reading notification text or private files.

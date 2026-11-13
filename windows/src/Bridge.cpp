@@ -119,8 +119,15 @@ void Bridge::receive(QString message){if(message.toUtf8().size()>4*1024*1024){m_
  if(!m_online)return;
  if(type=="capabilities"){m_peerFeatures.clear();const auto features=p.value("features").toArray();for(int i=0;i<16&&i<features.size();++i){const auto feature=features[i].toString();if(feature=="volume_state"||feature=="get_snapshot")m_peerFeatures.insert(feature);}send("capabilities",{{"features",QJsonArray{"volume_state","get_snapshot"}}});return;}
  if(type=="session_snapshot"||type=="session_changed"||type=="metadata_changed"||type=="playback_state"||type=="position_anchor"||type=="available_commands"||type=="volume_state")applyMedia(p);
- if(type=="command_result"){const auto request=p.value("requestId").toString();if(!m_pending.contains(request))return;m_pending.remove(request);if(p.contains("volume")&&p.contains("maxVolume"))applyMedia({{"volume",p.value("volume")},{"maxVolume",p.value("maxVolume")}});emit commandFinished(request,p.value("success").toBool(),p.value("error").toString());if(p.contains("success")&&!p.value("success").toBool())emit notification(p.value("error").toString(tr("Command unavailable")));}
- if(type=="lyrics_payload"){m_embeddedLyrics=p.value("lrc").toString();m_embeddedKey=lyricKey();if(!m_settings.contains("lyrics/bindings/"+lyricIdentity())){cancelLyricRequest();setLyrics(parseLyrics(m_embeddedLyrics),"phone");}}
+ if(type=="command_result"){const auto request=p.value("requestId").toString();if(!m_pending.contains(request))return;m_pending.remove(request);if(p.contains("volume")&&p.contains("maxVolume"))applyMedia({{"volume",p.value("volume")},{"maxVolume",p.value("maxVolume")}});emit commandFinished(request,p.value("success").toBool(),p.value("error").toString());if(p.contains("success")&&!p.value("success").toBool())emit notification(p.value("error").toString()=="track_changed"?tr("Track changed; try again"):p.value("error").toString(tr("Command unavailable")));}
+ if(type=="lyrics_payload"){
+  const auto text=p.value("lrc").toString();if(text.toUtf8().size()>65536)return;
+  if(p.contains("title")&&p.value("title").toString()!=title())return;
+  if(p.contains("artist")&&p.value("artist").toString()!=artist())return;
+  const auto rows=parseLyrics(text);if(rows.isEmpty())return;
+  m_embeddedLyrics=text;m_embeddedKey=lyricKey();
+  if(setting("lyrics/phoneSource","prefer").toString()!="off"&&!m_settings.contains("lyrics/bindings/"+lyricIdentity())){cancelLyricRequest();m_lyricProvider="phone";setLyrics(rows,"phone");}
+ }
 }
 QStringList Bridge::commands()const{QStringList list;for(const auto&v:m_media.value("commands").toArray())list<<v.toString();return list;}
 qint64 Bridge::position()const{qint64 value=m_position;if(playing()&&m_anchor.isValid())value+=qint64(m_anchor.elapsed()*qBound(-16.,m_media.value("speed").toDouble(1),16.));return qBound<qint64>(0,value,duration()>0?duration():std::numeric_limits<qint64>::max());}
@@ -130,8 +137,9 @@ void Bridge::updateLyricClock(){const auto line=LyricTimeline::lineAt(m_lyricTim
 void Bridge::setLyricsVisible(QString surface,bool visible){if(surface.size()>100)return;if(visible)m_lyricSurfaces.insert(surface);else m_lyricSurfaces.remove(surface);updateLyricClock();}
 void Bridge::cancelLyricRequest(){++m_lyricGeneration;if(m_lyricProviders)m_lyricProviders->cancel();if(m_lyricReply){auto reply=m_lyricReply;m_lyricReply=nullptr;reply->abort();}m_lyricsLoading=false;}
 
-void Bridge::command(QString name,double value){if(!QStringList{"play","pause","toggle","next","previous","seek","volume"}.contains(name))return;if(!m_online||m_pending.size()>=64)return;static QElapsedTimer limit;static int burst=0;if(!limit.isValid()||limit.elapsed()>1000){limit.restart();burst=0;}if(++burst>20)return;QString capability=name=="toggle"?(playing()?"pause":"play"):name;if(!commands().contains(capability)&&!commands().contains(name)){emit notification(tr("Command unavailable"));return;}if(!std::isfinite(value))return;const auto id=QUuid::createUuid().toString(QUuid::WithoutBraces);QJsonObject p{{"requestId",id},{"command",name},{"value",value}};if(name=="seek"){value=qBound(0.,value,double(duration()));p["positionMs"]=value;p["value"]=value;}if(name=="volume")p["volume"]=qBound(0.,value,1.);m_pending[id]=QDateTime::currentMSecsSinceEpoch();send("command_request",p);}
+void Bridge::command(QString name,double value){if(!QStringList{"play","pause","toggle","next","previous","seek","volume","favorite"}.contains(name))return;if(!m_online||m_pending.size()>=64)return;static QElapsedTimer limit;static int burst=0;if(!limit.isValid()||limit.elapsed()>1000){limit.restart();burst=0;}if(++burst>20)return;QString capability=name=="toggle"?(playing()?"pause":"play"):name;if(!commands().contains(capability)&&!commands().contains(name)){emit notification(tr("Command unavailable"));return;}if(!std::isfinite(value)||(name=="favorite"&&value!=0&&value!=1))return;const auto id=QUuid::createUuid().toString(QUuid::WithoutBraces);QJsonObject p{{"requestId",id},{"command",name},{"value",value}};if(name=="seek"){value=qBound(0.,value,double(duration()));p["positionMs"]=value;p["value"]=value;}if(name=="volume")p["volume"]=qBound(0.,value,1.);if(name=="favorite"){p["sessionId"]=m_media.value("sessionId");p["title"]=title();p["artist"]=artist();p["album"]=album();}m_pending[id]=QDateTime::currentMSecsSinceEpoch();send("command_request",p);}
 void Bridge::applyMedia(QJsonObject media){
+ const auto oldLyricKey=lyricKey();
  const auto old=title()+"|"+artist()+"|"+album();const auto previousSession=m_media.value("sessionId");m_position=position();
  for(auto it=media.begin();it!=media.end();++it)m_media[it.key()]=it.value();
  if(media.contains("positionMs"))m_position=qMax<qint64>(0,media.value("positionMs").toInteger());m_anchor.restart();
@@ -153,7 +161,13 @@ void Bridge::applyMedia(QJsonObject media){
  if(old!=title()+"|"+artist()+"|"+album()){if(!media.contains("artwork"))clearArtwork();}
  if(old!=title()+"|"+artist()+"|"+album()||previousSession!=m_media.value("sessionId")){m_artworkRetry.stop();m_artworkRetryAttempts=0;}
  if(!m_artwork.isEmpty()){m_artworkRetry.stop();m_artworkRetryAttempts=0;}else if(m_online&&m_peerFeatures.contains("get_snapshot")&&!title().isEmpty()&&m_artworkRetryAttempts<4&&!m_artworkRetry.isActive()){const int delays[]={800,1800,4000,8000};m_artworkRetry.start(delays[m_artworkRetryAttempts]);}
+ bool phoneLyricsChanged=false;
+ if(media.contains("phoneLyrics")){
+  const auto text=media.value("phoneLyrics").toString();
+  if(text.toUtf8().size()<=65536){phoneLyricsChanged=m_embeddedKey!=lyricKey()||text!=m_embeddedLyrics;m_embeddedLyrics=text;m_embeddedKey=lyricKey();}
+ }else if(oldLyricKey!=lyricKey()){m_embeddedLyrics.clear();m_embeddedKey.clear();}
  if(m_lyricKey!=lyricKey()){++m_searchGeneration;if(m_lyricSearchReply)m_lyricSearchReply->abort();m_lyricResults.clear();emit lyricResultsChanged();fetchLyrics();}
+ else if(phoneLyricsChanged&&setting("lyrics/phoneSource","prefer").toString()!="off"&&!m_settings.contains("lyrics/bindings/"+lyricIdentity()))fetchLyrics();
  applyTheme();emit changed();emit progressChanged();updateNative();
 }
 QString Bridge::cachePath()const{auto path=QStandardPaths::writableLocation(QStandardPaths::CacheLocation);QDir().mkpath(path);return path;}
@@ -165,7 +179,7 @@ void Bridge::previewCoverForTest(QString path){
  m_artworkDigest.clear();m_artwork=QUrl::fromLocalFile(QFileInfo(path).absoluteFilePath()).toString();
  applyTheme();emit changed();
 }
-bool Bridge::initializeNative(quintptr hwnd){m_native.setFileName(QCoreApplication::applicationDirPath()+"/WindowsNative.dll");using Init=int(*)(void*,void(*)(const char*,double));auto init=reinterpret_cast<Init>(m_native.resolve("dml_smtc_init"));m_nativeUpdate=reinterpret_cast<NativeUpdate>(m_native.resolve("dml_smtc_update"));if(!init||!m_nativeUpdate){emit notification(tr("System media bridge unavailable"));return false;}nativeOwner=this;if(init(reinterpret_cast<void*>(hwnd),nativeCommand)!=1){emit notification(tr("System media controls unavailable"));m_nativeUpdate=nullptr;return false;}updateNative();return true;}void Bridge::updateNative(){if(m_nativeUpdate){auto media=m_media;media["online"]=m_online&&setting("media/smtc",true).toBool();media["positionMs"]=position();media["artwork"]=QDir::toNativeSeparators(QUrl(m_artwork).toLocalFile());media["artworkRevision"]=QString::fromLatin1(m_artworkDigest.toHex());const auto json=QJsonDocument(media).toJson(QJsonDocument::Compact);const auto previous=m_nativeStatus;m_nativeStatus=m_nativeUpdate(json.constData());if(m_nativeStatus!=0&&m_nativeStatus!=previous)qWarning()<<"SMTC update failed, HRESULT:"<<Qt::hex<<quint32(m_nativeStatus);}}
+bool Bridge::initializeNative(quintptr hwnd){m_native.setFileName(QCoreApplication::applicationDirPath()+"/WindowsNative.dll");using Init=int(*)(void*,void(*)(const char*,double));auto init=reinterpret_cast<Init>(m_native.resolve("dml_smtc_init"));m_nativeUpdate=reinterpret_cast<NativeUpdate>(m_native.resolve("dml_smtc_update"));if(!init||!m_nativeUpdate){emit notification(tr("System media bridge unavailable"));return false;}nativeOwner=this;if(init(reinterpret_cast<void*>(hwnd),nativeCommand)!=1){emit notification(tr("System media controls unavailable"));m_nativeUpdate=nullptr;return false;}updateNative();return true;}void Bridge::updateNative(){if(m_nativeUpdate){auto media=m_media;media.remove("phoneLyrics");media["online"]=m_online&&setting("media/smtc",true).toBool();media["positionMs"]=position();media["artwork"]=QDir::toNativeSeparators(QUrl(m_artwork).toLocalFile());media["artworkRevision"]=QString::fromLatin1(m_artworkDigest.toHex());const auto json=QJsonDocument(media).toJson(QJsonDocument::Compact);const auto previous=m_nativeStatus;m_nativeStatus=m_nativeUpdate(json.constData());if(m_nativeStatus!=0&&m_nativeStatus!=previous)qWarning()<<"SMTC update failed, HRESULT:"<<Qt::hex<<quint32(m_nativeStatus);}}
 #include "SettingsBackend.inc"
 void Bridge::exportSettings(QUrl url){
  QJsonObject preferences,appearance,presets;for(const auto &key:m_settings.allKeys()){
@@ -232,11 +246,16 @@ QStringList Bridge::lyricProviderOrder()const{
 void Bridge::fetchLyrics(){
  cancelLyricRequest();const auto key=lyricKey();m_lyricKey=key;m_lyricProvider.clear();m_lyricMatchScore=0;setLyrics({},{});if(key.isEmpty())return;
  const auto identity=lyricIdentity();const auto binding=m_settings.value("lyrics/bindings/"+identity).toString();
+ const auto phoneMode=setting("lyrics/phoneSource","prefer").toString();
+ if(binding.isEmpty()&&phoneMode!="off"){
+  if(m_embeddedKey==key&&!m_embeddedLyrics.isEmpty()){auto rows=parseLyrics(m_embeddedLyrics);if(!rows.isEmpty()){m_lyricProvider="phone";m_lyricMatchScore=100;setLyrics(rows,"phone");return;}}
+  if(phoneMode=="only")return;
+ }
  const auto jsonName=!binding.isEmpty()?identity+".manual.json":key+".lyrics.json";
  QFile jsonCache(cachePath()+"/"+jsonName);if(jsonCache.open(QIODevice::ReadOnly)&&jsonCache.size()<=2*1024*1024){const auto doc=QJsonDocument::fromJson(jsonCache.readAll()).object();const auto rows=LyricTimeline::validated(doc.value("rows").toArray().toVariantList());const bool identityMatches=!doc.contains("trackIdentity")||doc.value("trackIdentity").toString()==identity;const bool durationMatches=!binding.isEmpty()||!doc.contains("durationMs")||qAbs(doc.value("durationMs").toInteger()-duration())<=1500;if(!rows.isEmpty()&&identityMatches&&durationMatches){m_lyricProvider=doc.value("provider").toString();m_lyricMatchScore=doc.value("score").toDouble();setLyrics(rows,binding.isEmpty()?"cache":"manual");return;}}
  const auto cacheName=!binding.isEmpty()?identity+".manual.lrc":key+".lrc";
  QFile cached(cachePath()+"/"+cacheName);if(cached.open(QIODevice::ReadOnly)&&cached.size()<=2*1024*1024){auto rows=parseLyrics(QString::fromUtf8(cached.readAll()));if(!rows.isEmpty()){m_lyricProvider=binding=="local"?"local":"lrclib";m_lyricMatchScore=100;setLyrics(rows,binding.isEmpty()?"cache":"manual");return;}}
- if(m_embeddedKey==key&&!m_embeddedLyrics.isEmpty()&&binding.isEmpty()){auto rows=parseLyrics(m_embeddedLyrics);if(!rows.isEmpty()){m_lyricProvider="phone";setLyrics(rows,"phone");return;}}
+ if(phoneMode=="only")return;
  if(!setting("lyrics/online",true).toBool()||!setting("lyrics/autoMatch",true).toBool())return;
  if(!binding.isEmpty()&&binding!="local"){
   const auto json=QJsonDocument::fromJson(binding.toUtf8()).object();const auto provider=json.isEmpty()?QString("lrclib"):json.value("provider").toString();const auto id=json.isEmpty()?binding:json.value("sourceId").toString();

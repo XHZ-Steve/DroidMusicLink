@@ -67,6 +67,7 @@ class PassiveLinkService : Service() {
  override fun onDestroy() { runCatching { getSystemService(ConnectivityManager::class.java).unregisterNetworkCallback(networkCallback) };stopNetwork();mediaTracker?.stop();mediaTracker=null;Hub.running.value=false;super.onDestroy() }
  inner class LinkServer(address:InetSocketAddress):WebSocketServer(address,listOf(Draft_6455(listOf(org.java_websocket.extensions.DefaultExtension()),listOf(org.java_websocket.protocols.Protocol("")),524288))) {
   private val authenticated=ConcurrentHashMap<WebSocket,String>()
+  private val lastPhoneLyrics=ConcurrentHashMap<WebSocket,String>()
   private val peerFeatures=ConcurrentHashMap<WebSocket,Set<String>>()
   private val seen=ConcurrentHashMap<WebSocket,ReplayWindow>()
   private val attempts=ConcurrentHashMap<String,Pair<Long,Int>>()
@@ -75,10 +76,18 @@ class PassiveLinkService : Service() {
   private val opened=ConcurrentHashMap<WebSocket,Long>()
   private var pendingOwner:WebSocket?=null
   private val challenges=ConcurrentHashMap<WebSocket,Challenge>()
+  private fun sendMediaSnapshot(conn:WebSocket,data:JSONObject) {
+   val lyrics=data.optString("phoneLyrics")
+   val identity=listOf("sessionId","title","artist","album","durationMs").joinToString("\u0000"){data.optString(it)}+"\u0000"+lyrics
+   val snapshot=JSONObject()
+   val repeated=lastPhoneLyrics.put(conn,identity)==identity
+   for(key in data.keys())if(key!="phoneLyrics"||!repeated)snapshot.put(key,data.get(key))
+   send(conn,"session_snapshot",snapshot)
+  }
   override fun onStart() {
    Hub.revoke={ id -> authenticated.entries.filter { it.value==id }.forEach { authenticated.remove(it.key);it.key.close(1008,"authorization_revoked") };Hub.connected.value=authenticated.values.toSet() }
-   Hub.broadcast={ data -> authenticated.keys.forEach { send(it,"session_snapshot",data) } }
-   Hub.broadcastVolume={ data -> authenticated.keys.forEach { if(peerFeatures[it]?.contains("volume_state")==true)send(it,"volume_state",data)else send(it,"session_snapshot",Hub.media.value) } }
+   Hub.broadcast={ data -> authenticated.keys.forEach { sendMediaSnapshot(it,data) } }
+   Hub.broadcastVolume={ data -> authenticated.keys.forEach { if(peerFeatures[it]?.contains("volume_state")==true)send(it,"volume_state",data)else sendMediaSnapshot(it,Hub.media.value) } }
    val nsd=getSystemService(NsdManager::class.java)
    registration=object:NsdManager.RegistrationListener {
     override fun onServiceRegistered(info:NsdServiceInfo) {}
@@ -93,7 +102,7 @@ class PassiveLinkService : Service() {
    send(conn,"hello",JSONObject().put("name",Build.MODEL).put("deviceId",store.fingerprint).put("certificateFingerprint",store.fingerprint))
    handler.postDelayed({ if(conn.isOpen && !authenticated.containsKey(conn))conn.close(1008,"authentication_timeout") },120000)
   }
-  override fun onClose(conn:WebSocket,code:Int,reason:String,remote:Boolean) { challenges.remove(conn);authenticated.remove(conn);peerFeatures.remove(conn);seen.remove(conn);opened.remove(conn);rates.remove(conn);Hub.connected.value=authenticated.values.toSet();handler.post { if(pendingOwner===conn) { Hub.pending.value=null;pendingOwner=null } } }
+  override fun onClose(conn:WebSocket,code:Int,reason:String,remote:Boolean) { lastPhoneLyrics.remove(conn);challenges.remove(conn);authenticated.remove(conn);peerFeatures.remove(conn);seen.remove(conn);opened.remove(conn);rates.remove(conn);Hub.connected.value=authenticated.values.toSet();handler.post { if(pendingOwner===conn) { Hub.pending.value=null;pendingOwner=null } } }
   override fun onError(conn:WebSocket?,ex:Exception) { if(conn==null) { Hub.error.value=getString(R.string.network_error) } }
   private fun send(c:WebSocket,type:String,payload:JSONObject) { if(c.isOpen)runCatching { c.send(JSONObject().put("protocolVersion",1).put("messageId",UUID.randomUUID().toString()).put("timestamp",System.currentTimeMillis()).put("type",type).put("payload",payload).toString()) } }
   private fun error(c:WebSocket,code:String) = send(c,"error",JSONObject().put("code",code))
@@ -138,7 +147,7 @@ class PassiveLinkService : Service() {
         if(challenges.remove(conn,challenge) && approved && conn.isOpen && SystemClock.elapsedRealtime()<challenge.expires) {
          val token=store.add(challenge.clientId,challenge.name)
          send(conn,"pair_approve",JSONObject().put("clientId",challenge.clientId).put("token",token).put("deviceId",store.fingerprint).put("name",Build.MODEL))
-         authenticated[conn]=challenge.clientId;Hub.connected.value=authenticated.values.toSet();send(conn,"session_snapshot",Hub.media.value)
+         authenticated[conn]=challenge.clientId;Hub.connected.value=authenticated.values.toSet();sendMediaSnapshot(conn,Hub.media.value)
         } else error(conn,"pairing_rejected")
         Hub.pending.value=null
        }
@@ -150,7 +159,7 @@ class PassiveLinkService : Service() {
      "auth" -> {
       val clientId=payload.getString("clientId");val token=payload.getString("token")
       if(!store.authenticate(clientId,token)) { error(conn,"unauthorized");conn.close(1008,"unauthorized");return }
-      store.touch(clientId);authenticated[conn]=clientId;Hub.connected.value=authenticated.values.toSet();send(conn,"auth_result",JSONObject().put("authenticated",true));send(conn,"capabilities",JSONObject().put("features",JSONArray(listOf("volume_state","get_snapshot"))));send(conn,"session_snapshot",Hub.media.value)
+      store.touch(clientId);authenticated[conn]=clientId;Hub.connected.value=authenticated.values.toSet();send(conn,"auth_result",JSONObject().put("authenticated",true));send(conn,"capabilities",JSONObject().put("features",JSONArray(listOf("volume_state","get_snapshot"))));sendMediaSnapshot(conn,Hub.media.value)
      }
      "capabilities" -> {
       val client=authenticated[conn]
@@ -163,7 +172,7 @@ class PassiveLinkService : Service() {
       if(client==null||!store.read().has(client)){error(conn,"unauthorized");return}
       handler.post {
        if(authenticated[conn]!=client||!store.read().has(client)){error(conn,"unauthorized");return@post}
-       val refresh=Hub.refreshMedia;if(refresh!=null)refresh()else send(conn,"session_snapshot",Hub.media.value)
+       val refresh=Hub.refreshMedia;if(refresh!=null)refresh()else sendMediaSnapshot(conn,Hub.media.value)
       }
      }
      "command_request" -> {

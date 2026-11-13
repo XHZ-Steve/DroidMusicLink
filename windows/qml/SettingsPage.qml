@@ -35,6 +35,8 @@ Item {
     signal searchDevicesRequested()
     signal forgetDeviceRequested(string url)
     signal actionRequested(string key)
+    function prepare(group){const cached=groupCaches.itemAt(Math.max(0,Math.min(5,group)));if(cached)cached.visited=true}
+    Timer{interval:700;running:page.componentReady;repeat:false;onTriggered:page.prepare(0)}
     property int pendingGroup:initialGroup
     function requestCategory(group){pendingGroup=group;Qt.callLater(applyCategory)}
     function applyCategory(){if(activeGroup===pendingGroup)return;activeGroup=pendingGroup;activeSection=0;searchField.clear()}
@@ -594,13 +596,16 @@ Item {
             ColumnLayout {
                 id:contentColumn;width:contentScroll.availableWidth-12;spacing:10
                 Repeater {
-                    model:6
+                    id:groupCaches;model:6
                     Loader {
                         id:groupCache;required property int index
                         property bool visited:false
                         objectName:"settings-group-cache-"+index
                         Layout.fillWidth:true;visible:page.activeGroup===index
                         active:visited;asynchronous:true
+                        property real reveal:status===Loader.Ready?1:0
+                        opacity:reveal;transform:Translate{y:(1-groupCache.reveal)*6}
+                        Behavior on reveal{enabled:page.motion&&groupCache.visible;NumberAnimation{duration:140;easing.type:Easing.OutCubic}}
                         onVisibleChanged:if(visible)visited=true
                         Component.onCompleted:if(visible)visited=true
                         onLoaded:if(page.activeGroup===index){restoreScroll.restart();sectionJump.restart();if(page.highlightedKey)jumpTimer.restart()}

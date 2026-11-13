@@ -118,7 +118,8 @@
                   "previous",
                   "next",
                   "seek",
-                  "volume"
+                  "volume",
+                  "favorite"
                 ]
               }
             }
@@ -175,6 +176,50 @@
                   "required": [
                     "volume"
                   ]
+                }
+              },
+              {
+                "if": {
+                  "properties": {
+                    "command": {
+                      "const": "favorite"
+                    }
+                  }
+                },
+                "then": {
+                  "required": [
+                    "value",
+                    "sessionId",
+                    "title",
+                    "artist",
+                    "album"
+                  ],
+                  "properties": {
+                    "value": {
+                      "enum": [
+                        0,
+                        1
+                      ]
+                    },
+                    "sessionId": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 4096
+                    },
+                    "title": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 4096
+                    },
+                    "artist": {
+                      "type": "string",
+                      "maxLength": 4096
+                    },
+                    "album": {
+                      "type": "string",
+                      "maxLength": 4096
+                    }
+                  }
                 }
               }
             ]
@@ -335,13 +380,24 @@
                     "previous",
                     "next",
                     "seek",
-                    "volume"
+                    "volume",
+                    "favorite"
                   ]
                 }
               },
               "artwork": {
                 "type": "string",
                 "maxLength": 349528
+              },
+              "favorite": {
+                "type": "boolean"
+              },
+              "favoriteKnown": {
+                "type": "boolean"
+              },
+              "phoneLyrics": {
+                "type": "string",
+                "maxLength": 65536
               }
             },
             "required": []

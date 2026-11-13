@@ -28,6 +28,8 @@ class Bridge : public QObject {
  Q_PROPERTY(qint64 position READ position NOTIFY progressChanged)
  Q_PROPERTY(bool playing READ playing NOTIFY changed)
  Q_PROPERTY(QStringList commands READ commands NOTIFY changed)
+ Q_PROPERTY(bool favorited READ favorited NOTIFY changed)
+ Q_PROPERTY(bool favoriteKnown READ favoriteKnown NOTIFY changed)
  Q_PROPERTY(double volume READ volume NOTIFY changed)
  Q_PROPERTY(bool volumeKnown READ volumeKnown NOTIFY changed)
  Q_PROPERTY(QVariantList lyrics READ lyrics NOTIFY lyricsChanged)
@@ -64,6 +66,8 @@ public:
  qint64 duration()const{return qBound<qint64>(0,m_media.value("durationMs").toInteger(),9000000000000LL);}
  qint64 position()const;
  bool playing()const{return m_online&&m_media.value("state").toString()=="playing";}
+ bool favorited()const{return m_media.value("favorite").toBool();}
+ bool favoriteKnown()const{return m_media.value("favoriteKnown").toBool();}
  QStringList commands()const; QVariantList lyrics()const{return m_lyrics;} int currentLine()const;
  qint64 lyricPosition()const{return position()+setting("lyrics/offset",0).toInt();}
  bool lyricsLoading()const{return m_lyricsLoading;}

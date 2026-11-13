@@ -89,7 +89,7 @@ Item {
         if(lyricsMode&&controller.lyrics.length&&motion&&active&&!changingLayout){focusMotion.start();return}
         beginNextLayout()
     }
-    NumberAnimation{id:focusMotion;target:canvas;property:"lyricFocus";from:0;to:1;duration:170;easing.type:Easing.InOutCubic;onFinished:canvas.beginNextLayout()}
+    NumberAnimation{id:focusMotion;target:canvas;property:"lyricFocus";from:0;to:1;duration:95;easing.type:Easing.InOutCubic;onFinished:canvas.beginNextLayout()}
     onModeChanged:if(ready){if(!active)cancelTransitionForResize();else{if(!changingLayout)freezeGeometry();scheduleTransition()}}
     onArtworkScaleChanged:cancelTransitionForResize()
     onWidthChanged:cancelTransitionForResize()
@@ -99,7 +99,7 @@ Item {
     function cancelTransitionForResize(){if(!ready)return;++transitionGeneration;focusMotion.stop();layoutMotion.stop();lyricFocus=0;transitionProgress=1;changingLayout=false;Qt.callLater(polishLayout)}
     function polishLayout(){slots.ensurePolished()}
     Component.onCompleted:ready=true
-    NumberAnimation{id:layoutMotion;target:canvas;property:"transitionProgress";from:0;to:1;duration:460;easing.type:Easing.InOutCubic;onFinished:{canvas.changingLayout=false;canvas.lyricFocus=0}}
+    NumberAnimation{id:layoutMotion;target:canvas;property:"transitionProgress";from:0;to:1;duration:320;easing.type:Easing.InOutCubic;onFinished:{canvas.changingLayout=false;canvas.lyricFocus=0}}
     Binding{target:canvas;property:"textAlignment";value:canvas.changingLayout?canvas.mix(canvas.fromGeometry.alignment,canvas.toGeometry.alignment):canvas.split?1:0}
     TypographyTokens{id:typography}
     DesignTokens{id:tokens;light:canvas.light;motion:canvas.motion;accent:canvas.accent}
@@ -142,7 +142,7 @@ Item {
         id: artwork;objectName:"heroArtwork"
         width:canvas.coverGeometry.width;height:canvas.coverGeometry.height
         x:canvas.coverGeometry.x;y:canvas.coverGeometry.y
-        source:canvas.controller.artwork;motion:canvas.motion&&canvas.active;transitionDuration:tokens.change
+        source:canvas.controller.artwork;motion:canvas.motion&&canvas.active;transitionDuration:Math.min(240,tokens.change)
         ambientColor:canvas.controller.ambientPrimary||canvas.accent
         onActivated:canvas.nextLayout()
         actionText:qsTr("Switch layout")
@@ -244,9 +244,12 @@ Item {
                     text:modelData.text;textFormat:Text.PlainText
                     color:expandedLyrics.colorOption("sungColor",canvas.textColor)
                     font.family:modelData.family;font.pixelSize:expandedLyrics.fontSize
-                    font.weight:Math.round(canvas.formatMix(expandedLyrics.activeWeight,compactLyrics.activeWeight))
+                    font.weight:compactLyrics.activeWeight
                     font.letterSpacing:canvas.formatMix(expandedLyrics.option("letterSpacing",0),compactLyrics.option("letterSpacing",0))
                     renderType:Text.CurveRendering;renderTypeQuality:104;wrapMode:Text.NoWrap;lineHeight:expandedLyrics.option("lineHeight",1.25)
+                    // Blend two cached weights instead of reshaping every word
+                    // for a new intermediate QFont on every animation frame.
+                    Text{text:morphWord.text;textFormat:Text.PlainText;font:morphWord.font;font.weight:expandedLyrics.activeWeight;color:morphWord.color;opacity:Math.pow(1-canvas.transitionProgress,3);renderType:Text.CurveRendering;renderTypeQuality:104;lineHeight:expandedLyrics.option("lineHeight",1.25)}
                     readonly property real fill:!modelData.timed?1:Math.max(0,Math.min(1,(canvas.controller.lyricPosition-modelData.time)/Math.max(1,modelData.end-modelData.time)))
                     Item{visible:morphWord.fill<1;x:morphWord.width*morphWord.fill;width:morphWord.width*(1-morphWord.fill);height:morphWord.height;clip:true
                         Text{x:-parent.x;text:morphWord.text;textFormat:Text.PlainText;font:morphWord.font;color:expandedLyrics.colorOption("unsungColor",canvas.secondaryColor);renderType:Text.CurveRendering;renderTypeQuality:104;lineHeight:expandedLyrics.option("lineHeight",1.25)}
