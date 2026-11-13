@@ -66,19 +66,21 @@ void MusicBrainzCoverArtProvider::request(const CoverArtTrack &track,int resolut
 CoverArtService::CoverArtService(QString path,QObject *parent,QNetworkAccessManager *transport):QObject(parent),provider(this,transport),directory(path){QDir().mkpath(directory);provider.cachedImage=[this](QString id,int size){QFileInfo file(directory+"/"+hash(id+QString::number(size))+".png");return file.isFile()&&file.size()<=32*1024*1024;};}
 void CoverArtService::cancel(){++generation;epoch->store(generation);provider.cancel();}
 qint64 CoverArtService::bytes()const{qint64 n=0;for(auto file:QDir(directory).entryInfoList(QDir::Files))n+=file.size();return n;}
-void CoverArtService::trim(){auto files=QDir(directory).entryInfoList(QDir::Files,QDir::Time|QDir::Reversed);auto total=bytes();for(auto file:files){if(total<=budget)break;if(file.absoluteFilePath()!=activePath&&QFile::remove(file.absoluteFilePath()))total-=file.size();}}
+void CoverArtService::trim(){auto files=QDir(directory).entryInfoList(QDir::Files,QDir::Time|QDir::Reversed);auto total=bytes();for(auto file:files){if(total<=budget)break;if(file.absoluteFilePath()!=activePath&&file.absoluteFilePath()!=activeThumbnailPath&&QFile::remove(file.absoluteFilePath()))total-=file.size();}}
 void CoverArtService::setBudget(int mb){budget=qBound(32,mb,2048)*1024LL*1024;trim();}
-void CoverArtService::clear(){cancel();activePath.clear();for(auto f:QDir(directory).entryInfoList(QDir::Files))QFile::remove(f.absoluteFilePath());failures.clear();}
+void CoverArtService::clear(){cancel();activePath.clear();activeThumbnailPath.clear();for(auto f:QDir(directory).entryInfoList(QDir::Files))QFile::remove(f.absoluteFilePath());failures.clear();}
 void CoverArtService::decode(QByteArray data,const QString &key,QString release,int resolution,bool cached,std::function<void(CoverArtResult)> done){
  const auto token=generation;auto watcher=new QFutureWatcher<CoverArtResult>(this);const auto root=directory;const auto guard=epoch;
- connect(watcher,&QFutureWatcher<CoverArtResult>::finished,this,[this,watcher,token,done]{auto result=watcher->result();watcher->deleteLater();if(token==generation&&!result.path.isEmpty())activePath=result.path;trim();if(token!=generation)return;done(result);});
+ connect(watcher,&QFutureWatcher<CoverArtResult>::finished,this,[this,watcher,token,done]{auto result=watcher->result();watcher->deleteLater();if(token==generation&&!result.path.isEmpty()){activePath=result.path;activeThumbnailPath=result.thumbnailPath;}trim();if(token!=generation)return;done(result);});
  watcher->setFuture(QtConcurrent::run([data,key,release,resolution,cached,root,guard,token]()mutable{
   if(cached&&data.isEmpty()){QFile image(root+"/"+hash(release+QString::number(resolution))+".png");if(image.open(QIODevice::ReadOnly)&&image.size()<=32*1024*1024)data=image.readAll();}
   CoverArtResult result;if(guard->load()!=token)return result;if(data.isEmpty()||data.size()>(cached?32:10)*1024*1024)return result;QBuffer input;input.setData(data);input.open(QIODevice::ReadOnly);QImageReader reader(&input);auto size=reader.size();if(!size.isValid()||size.width()>8192||size.height()>8192||qint64(size.width())*size.height()>16777216)return result;auto image=reader.read();if(guard->load()!=token)return result;if(image.isNull())return result;
   if(qMax(image.width(),image.height())>resolution)image=image.scaled(resolution,resolution,Qt::KeepAspectRatio,Qt::SmoothTransformation);
   auto path=root+"/"+hash(release+QString::number(resolution))+".png";
   if(!cached){if(guard->load()!=token)return result;QSaveFile file(path);if(!file.open(QIODevice::WriteOnly)||!image.save(&file,"PNG")||guard->load()!=token||!file.commit())return result;}
-  result={path,release,"musicbrainz",image.size(),QCryptographicHash::hash(data,QCryptographicHash::Sha256),cached};return result;
+  const auto thumbnail=path+".smtc.jpg";QSaveFile small(thumbnail);
+  if(guard->load()!=token||!small.open(QIODevice::WriteOnly)||!image.scaled(512,512,Qt::KeepAspectRatio,Qt::SmoothTransformation).save(&small,"JPEG",90)||guard->load()!=token||!small.commit())return result;
+  result={path,release,"musicbrainz",image.size(),QCryptographicHash::hash(data,QCryptographicHash::Sha256),cached,thumbnail};return result;
  }));
 }
 void CoverArtService::request(CoverArtTrack track,int resolution,bool refresh,std::function<void(CoverArtResult)> done){

@@ -10,7 +10,7 @@
 #include <atomic>
 #include <memory>
 struct CoverArtTrack {QString title,artist,album; qint64 duration=0; QString key()const;};
-struct CoverArtResult {QString path,release,source;QSize pixels;QByteArray digest;bool cached=false;};
+struct CoverArtResult {QString path,release,source;QSize pixels;QByteArray digest;bool cached=false;QString thumbnailPath;};
 class CoverArtProvider:public QObject {
 public:using Done=std::function<void(QByteArray,QString,bool)>;using QObject::QObject;
  virtual QString id()const=0;virtual void request(const CoverArtTrack &,int,Done)=0;virtual void cancel()=0;
@@ -26,7 +26,7 @@ public:explicit MusicBrainzCoverArtProvider(QObject *parent=nullptr,QNetworkAcce
  static QString selectRelease(const CoverArtTrack &,const QJsonObject &);
 };
 class CoverArtService:public QObject {
- MusicBrainzCoverArtProvider provider;QString directory,activePath;quint64 generation=0;std::shared_ptr<std::atomic<quint64>> epoch=std::make_shared<std::atomic<quint64>>(0);qint64 budget=256*1024*1024;QHash<QString,qint64> failures;
+ MusicBrainzCoverArtProvider provider;QString directory,activePath,activeThumbnailPath;quint64 generation=0;std::shared_ptr<std::atomic<quint64>> epoch=std::make_shared<std::atomic<quint64>>(0);qint64 budget=256*1024*1024;QHash<QString,qint64> failures;
  void decode(QByteArray,const QString &,QString,int,bool,std::function<void(CoverArtResult)>);
  void trim();
 public:explicit CoverArtService(QString,QObject *parent=nullptr,QNetworkAccessManager *transport=nullptr);

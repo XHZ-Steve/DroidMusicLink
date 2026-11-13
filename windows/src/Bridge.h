@@ -142,7 +142,7 @@ private:
  QSettings m_settings;QWebSocket m_socket;QNetworkAccessManager m_network;QUdpSocket m_mdns;
  QTimer m_progress,m_heartbeat,m_retry,m_pairTimeout;QElapsedTimer m_anchor,m_lastPong;
  void enhanceCover(bool refresh=false);void applyEnhancedCover(CoverArtResult result);
- CoverArtService *m_coverService=nullptr;QString m_coverRequestKey,m_phoneArtwork;QByteArray m_phoneArtworkDigest;QSize m_phonePixels;CoverArtResult m_pendingCover;
+ CoverArtService *m_coverService=nullptr;QString m_coverRequestKey,m_phoneArtwork,m_nativeArtwork;QByteArray m_phoneArtworkDigest;QSize m_phonePixels;CoverArtResult m_pendingCover;
  QTimer m_artworkRetry;int m_artworkRetryAttempts=0;
  QTimer m_lyricClock;bool m_uiVisible=true,m_lyricsLoading=false;int m_currentLyricLine=-1;
  QSet<QString> m_lyricSurfaces,m_peerFeatures;

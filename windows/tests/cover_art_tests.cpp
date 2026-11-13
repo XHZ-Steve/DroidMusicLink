@@ -46,6 +46,7 @@ int main(int argc,char **argv){
  FixtureNetwork network;network.port=server.serverPort();CoverArtService service(directory.path(),nullptr,&network);CoverArtResult result;
  auto run=[&](CoverArtTrack t,bool refresh){result={};QEventLoop wait;bool finished=false;service.request(t,1200,refresh,[&](CoverArtResult r){result=r;finished=true;wait.quit();});QTimer::singleShot(5000,&wait,&QEventLoop::quit);if(!finished)wait.exec();return finished;};
  QElapsedTimer clock;clock.start();if(!run(track,false)||result.pixels!=QSize(1200,1200)||result.cached||network.requests!=2)return 5;
+ if(!QFileInfo::exists(result.thumbnailPath)||QFileInfo(result.thumbnailPath).size()>2*1024*1024||QImage(result.thumbnailPath).size()!=QSize(512,512))return 14;
  qInfo()<<"Fixture: phone baseline 512x512, downloaded 1600x1600, decoded cache"<<result.pixels<<"elapsed ms"<<clock.elapsed();
  if(!run(track,false)||!result.cached||network.requests!=2)return 6;
  auto albumTrack=track;albumTrack.title="TEST other song";auto nextRecording=recording;nextRecording["title"]=albumTrack.title;activeResponse["recordings"]=QJsonArray{nextRecording};if(!run(albumTrack,false)||!result.cached||network.requests!=3)return 7;
