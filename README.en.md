@@ -6,9 +6,11 @@ Bring your Android media session to Windows: artwork, playback controls, synchro
 
 ## Running on real devices
 
+![Windows app in motion](docs/screenshots/windows-demo.gif)
+
 ![Windows connected to an actual Android media session](docs/screenshots/windows-current.png)
 
-<img src="docs/screenshots/android-current.png" width="360" alt="Android app captured on a physical phone using ADB" />
+<img src="docs/screenshots/android-current.png" width="360" alt="Android app on a physical phone, with the status bar cropped" />
 
 These are actual application captures taken at different times, not mockups or preview media.
 

@@ -8,9 +8,11 @@
 
 Windows 客户端连接真实手机媒体会话的播放画面，使用当前默认外观与歌词配置。
 
+![Windows 实际运行动图](docs/screenshots/windows-demo.gif)
+
 ![Windows 实际播放：封面氛围、同步歌词和胶囊控制栏](docs/screenshots/windows-current.png)
 
-Android 应用通过 ADB 在真实设备上截取；截图与 Windows 画面拍摄于不同时间。
+Android 实机截图已裁去状态栏；截图与 Windows 画面拍摄于不同时间。
 
 <img src="docs/screenshots/android-current.png" width="360" alt="Android 实机：连接服务与当前媒体" />
 
