@@ -16,7 +16,7 @@ Android SDK 36, Android emulator 36.2.12 running Pixel 2 XL API 30.
 | Android installation/start | API 30 emulator | Installed and launched; screenshots from runtime |
 | Windows screenshots | `artifacts/screenshots/` | Actual QQuickWindow captures at 4 sizes plus tray/floating/desktop surfaces |
 | Android screenshots | `android/screenshots/` | Actual emulator screens, home/device views |
-| Independent security review | `docs/reviews/2026-11-11-security.md` | Defects reported and iteratively fixed |
+| Independent security review | Local security review notes | Defects reported and iteratively fixed |
 | Native TLS handshake | Emulator WLAN listener through local test proxy | Initial Keystore RSA padding and WebSocket subprotocol failures reproduced and fixed; pinned TLS and unauthorized-control rejection then passed |
 | Windows package dependency smoke | PATH restricted to Windows system directories | Portable startup, silent per-user setup, installed startup and silent uninstall passed |
 | Icon provenance | Lucide upstream archive / integrity | Root agent verified npm SHA-512 integrity and exact upstream TTF, 2,317 SVGs / 2,337 font codepoints |
@@ -133,7 +133,7 @@ Final package smoke was repeated after the final light-theme and titlebar fixes:
 - Tray regression: `DroidMediaLink.exe --tray-smoke` emits the actual Qt Context/Trigger signal routes. With main window hidden, Context displays the independent rounded 320x326 window; left Trigger hides that menu and displays the main window only. Both assertions passed and a real window image was saved. This is a signal-route/runtime-window test, not a claim of physically clicking every taskbar orientation.
 - Discovery: a test-only DNS-SD advertisement named `Android emulator TEST` pointed at the real Android emulator WSS relay. Twelve identical announcements produced one entry for that address. The genuine emulator NSD name was also visible at its different network address. No test devices are built into the product. `scripts/probe-discovery.py` documents this fixture.
 - Portable TLS: actual Schannel runtime failed with automatic protocol negotiation against API30 while the development environment's TLS backend differed. Explicit TLS1.2 was verified with the portable runtime; peer/SAS verification and native cipher policy remain enabled. Phone WSS and mDNS bypass HTTP/SOCKS proxies; internet lyric/update requests keep their existing network behavior. Desktop and phone both visibly showed code 253296, then phone approval led the desktop UI to Connected. Screenshots: `pairing-desktop-matched.jpg`, `pairing-android-matched.png`. The code is expired, not an authentication token.
-- Pairing security was independently reviewed read-only in `docs/reviews/2026-11-11-pairing-v2.md`. The envelope schema now rejects legacy pair_request and validates all new commitments/nonces.
+- Pairing security was independently reviewed read-only in local pairing review notes. The envelope schema now rejects legacy pair_request and validates all new commitments/nonces.
 
 Physical third-party-player/Bluetooth checks and broad router/DPI/GPU matrices remain separate from these emulator and local runtime results.
 

@@ -15,3 +15,22 @@
 *.p12
 __pycache__/
 aqtinstall.log
+
+# Local agent instructions, task prompts and editor/assistant state
+/AGENTS.md
+/CODEX_FULL_TASK.md
+/.agents/
+/.codex/
+/.claude/
+/prompts/
+**/*.prompt.md
+
+# Local review notes and one-off visual capture tooling
+/docs/reviews/
+/scripts/capture-windows-ui.ps1
+
+# Transient logs and OS files
+*.log
+.DS_Store
+Thumbs.db
+Desktop.ini

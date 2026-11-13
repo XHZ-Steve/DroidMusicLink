@@ -17,7 +17,7 @@ Copy-Item "$root/LICENSE","$root/THIRD_PARTY_NOTICES.md" $stage
 Copy-Item "$root/README.md","$root/README.en.md","$root/CHANGELOG.md" $stage
 New-Item -ItemType Directory -Force "$stage/docs" | Out-Null
 Get-ChildItem "$root/docs" -File -Filter '*.md' | Copy-Item -Destination "$stage/docs"
-foreach ($subdirectory in @('screenshots','reviews')) {
+foreach ($subdirectory in @('screenshots')) {
     if (Test-Path "$root/docs/$subdirectory") { Copy-Item "$root/docs/$subdirectory" "$stage/docs/$subdirectory" -Recurse -Force }
 }
 

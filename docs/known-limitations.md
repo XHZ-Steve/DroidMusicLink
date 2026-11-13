@@ -1,7 +1,7 @@
 # Known limitations
 
 This is an implemented development build, not a claim that every requirement
-in `CODEX_FULL_TASK.md` has passed acceptance.
+in the complete product acceptance matrix has passed acceptance.
 
 The Windows UI redesign passed the 2026-11-12 runtime matrix described in
 `windows-ui-design.md`, including native edge resizing and 100/150/200% optical
@@ -46,5 +46,5 @@ screen-reader matrix remain outside the verified coverage.
   screen states have not all been measured. Do not infer efficiency numbers
   from event-driven architecture alone.
 
-Use `docs/testing.md` for executed evidence and `docs/reviews/` for incremental
+Use `docs/testing.md` for executed evidence and local review notes for incremental
 findings, including fixed defects and remaining verification.
