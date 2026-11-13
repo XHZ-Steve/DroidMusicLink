@@ -147,7 +147,7 @@ void Bridge::applyMedia(QJsonObject media){
  const auto old=title()+"|"+artist()+"|"+album();const auto previousSession=m_media.value("sessionId");m_position=position();
  for(auto it=media.begin();it!=media.end();++it)m_media[it.key()]=it.value();
  if(media.contains("positionMs"))m_position=qMax<qint64>(0,media.value("positionMs").toInteger());m_anchor.restart();
- auto clearArtwork=[this]{m_nativeArtwork.clear();const auto previous=QUrl(m_phoneArtwork).toLocalFile();if(!previous.isEmpty())QFile::remove(previous);m_phoneArtwork.clear();m_phoneArtworkDigest.clear();m_phonePixels={};m_artwork.clear();m_artworkDigest.clear();m_coverPalette={};m_artworkAccent="#9bc3c6";};
+ auto clearArtwork=[this]{m_nativeArtwork.clear();const auto previous=QUrl(m_phoneArtwork).toLocalFile();if(!previous.isEmpty())QFile::remove(previous);m_phoneArtwork.clear();m_phoneArtworkDigest.clear();m_phonePixels={};m_enhancedPixels={};m_artwork.clear();m_artworkDigest.clear();m_coverPalette={};m_artworkAccent="#9bc3c6";};
  if(old!=title()+"|"+artist()+"|"+album()){clearArtwork();m_coverRequestKey.clear();m_coverService->cancel();m_pendingCover={};}
  if(media.contains("artwork")){
   const auto bytes=QByteArray::fromBase64(media.value("artwork").toString().toLatin1());
@@ -163,7 +163,7 @@ void Bridge::applyMedia(QJsonObject media){
      const auto previous=QUrl(m_phoneArtwork).toLocalFile();m_phoneArtworkDigest=digest;m_phoneArtwork=QUrl::fromLocalFile(path).toString();
      if(previous!=path&&!previous.isEmpty())QFile::remove(previous);
      // Repeated snapshots must never replace an enhanced texture with a thumbnail.
-     if(m_coverRequestKey.isEmpty()||m_artwork==m_phoneArtwork||m_artwork.isEmpty()||!m_artwork.contains("/covers/")){m_nativeArtwork.clear();m_artworkDigest=digest;m_artwork=m_phoneArtwork;}
+     if(m_coverRequestKey.isEmpty()||m_artwork==m_phoneArtwork||m_artwork.isEmpty()||!m_artwork.contains("/covers/")||(!m_enhancedPixels.isEmpty()&&qMin(m_phonePixels.width(),m_phonePixels.height())>=qMin(m_enhancedPixels.width(),m_enhancedPixels.height()))){m_enhancedPixels={};m_nativeArtwork.clear();m_artworkDigest=digest;m_artwork=m_phoneArtwork;}
     }
 
    }else clearArtwork();
@@ -185,7 +185,7 @@ void Bridge::applyMedia(QJsonObject media){
  if(phoneLyricsChanged)emit lyricProvidersChanged();
  enhanceCover();applyTheme();emit changed();emit progressChanged();updateNative();
 }
-QString Bridge::cachePath()const{auto path=QStandardPaths::writableLocation(QStandardPaths::CacheLocation);QDir().mkpath(path);return path;}
+QString Bridge::cachePath()const{const auto args=QCoreApplication::arguments();const auto profile=args.indexOf("--test-profile");auto path=profile>=0&&profile+1<args.size()?QDir(args[profile+1]).absoluteFilePath("cache"):QStandardPaths::writableLocation(QStandardPaths::CacheLocation);QDir().mkpath(path);return path;}
 void Bridge::previewCoverForTest(QString path){
  QImageReader reader(path);const auto size=reader.size();
  if(!size.isValid()||size.width()>8192||size.height()>8192||qint64(size.width())*size.height()>33554432)return;
@@ -409,14 +409,14 @@ void Bridge::testLyricProvider(QString provider){if(provider=="phone"){if(m_onli
 void Bridge::setDragging(bool dragging){if(m_dragging==dragging)return;m_dragging=dragging;if(dragging){m_progress.stop();m_lyricClock.stop();}else{if(!m_deferredMedia.isEmpty()){auto latest=m_deferredMedia;m_deferredMedia={};if(m_dragReceipt.isValid()&&latest.contains("positionMs")&&latest.value("state").toString(m_media.value("state").toString())=="playing")latest["positionMs"]=latest.value("positionMs").toInteger()+qint64(m_dragReceipt.elapsed()*latest.value("speed").toDouble(m_media.value("speed").toDouble(1)));m_dragReceipt.invalidate();applyMedia(latest);}if(!m_pendingCover.path.isEmpty()){auto cover=m_pendingCover;m_pendingCover={};applyEnhancedCover(cover);}setUiVisible(m_uiVisible);emit progressChanged();updateLyricClock();}}
 
 void Bridge::refreshCoverArt(){enhanceCover(true);}
-void Bridge::clearCoverArtCache(){m_pendingCover={};m_coverService->clear();m_coverRequestKey.clear();m_nativeArtwork.clear();m_artwork=m_phoneArtwork;m_artworkDigest=m_phoneArtworkDigest;emit changed();updateNative();}
+void Bridge::clearCoverArtCache(){m_pendingCover={};m_enhancedPixels={};m_coverService->clear();m_coverRequestKey.clear();m_enhancedPixels={};m_nativeArtwork.clear();m_artwork=m_phoneArtwork;m_artworkDigest=m_phoneArtworkDigest;emit changed();updateNative();}
 void Bridge::enhanceCover(bool refresh){
  const auto mode=setting("cover/mode","off").toString();
- if(mode=="off"||setting("cover/phoneOnly",false).toBool()){m_pendingCover={};m_coverService->cancel();m_coverRequestKey.clear();if(m_artwork!=m_phoneArtwork){m_nativeArtwork.clear();m_artwork=m_phoneArtwork;m_artworkDigest=m_phoneArtworkDigest;emit changed();updateNative();}return;}
+ if(mode=="off"||setting("cover/phoneOnly",false).toBool()){m_pendingCover={};m_coverService->cancel();m_coverRequestKey.clear();if(m_artwork!=m_phoneArtwork){m_enhancedPixels={};m_nativeArtwork.clear();m_artwork=m_phoneArtwork;m_artworkDigest=m_phoneArtworkDigest;emit changed();updateNative();}return;}
  CoverArtTrack track{title(),artist(),album(),duration()};const int target=setting("cover/resolution",1200).toInt();
  const auto key=track.key()+QString::number(target)+mode;if(!refresh&&m_coverRequestKey==key)return;
  m_coverRequestKey=key;m_coverService->setBudget(setting("cover/cacheMB",256).toInt());
  if(track.title.isEmpty()||track.artist.isEmpty()||track.album.isEmpty()||track.duration<=0||(mode=="auto"&&qMax(m_phonePixels.width(),m_phonePixels.height())>=target))return;
  m_coverService->request(track,target,refresh,[this,key](CoverArtResult result){if(key!=m_coverRequestKey||result.path.isEmpty())return;if(qMin(result.pixels.width(),result.pixels.height())<=qMin(m_phonePixels.width(),m_phonePixels.height()))return;if(m_dragging){m_pendingCover=result;return;}applyEnhancedCover(result);});
 }
-void Bridge::applyEnhancedCover(CoverArtResult result){if(result.path.isEmpty())return;m_nativeArtwork=result.thumbnailPath.isEmpty()?QString():QUrl::fromLocalFile(result.thumbnailPath).toString();m_artwork=QUrl::fromLocalFile(result.path).toString()+"?v="+QString::fromLatin1(result.digest.toHex().left(16));m_artworkDigest=result.digest;emit changed();updateNative();qInfo()<<"Cover enhancement"<<result.source<<"phone"<<m_phonePixels<<"enhanced"<<result.pixels<<"cache"<<result.cached;}
+void Bridge::applyEnhancedCover(CoverArtResult result){if(result.path.isEmpty()||qMin(result.pixels.width(),result.pixels.height())<=qMin(m_phonePixels.width(),m_phonePixels.height()))return;m_enhancedPixels=result.pixels;m_nativeArtwork=result.thumbnailPath.isEmpty()?QString():QUrl::fromLocalFile(result.thumbnailPath).toString();m_artwork=QUrl::fromLocalFile(result.path).toString()+"?v="+QString::fromLatin1(result.digest.toHex().left(16));m_artworkDigest=result.digest;emit changed();updateNative();qInfo()<<"Cover enhancement"<<result.source<<"phone"<<m_phonePixels<<"enhanced"<<result.pixels<<"cache"<<result.cached;}
