@@ -34,6 +34,13 @@ inline QVariantList descriptors(){
  S("info/player","Current player",2,0,"readonly","");
  S("info/playerSelection","Player selection",2,0,"readonly",QCoreApplication::translate("Settings","Select the player in the phone app"));
  action("floating","Floating player",2,1);
+ S("cover/mode","Cover quality",2,0,"enum","off",0,1,1,QVariantList{QVariantMap{{"label",QCoreApplication::translate("Settings","Off")},{"value","off"}},QVariantMap{{"label",QCoreApplication::translate("Settings","Automatic enhancement")},{"value","auto"}},QVariantMap{{"label",QCoreApplication::translate("Settings","Prefer high resolution")},{"value","high"}}},false,QCoreApplication::translate("Settings","Online enhancement sends song, artist and album metadata to MusicBrainz. Cover images retain their owners' copyrights."));
+ S("cover/phoneOnly","Use phone artwork only",2,0,"bool",false);
+ S("cover/resolution","Target cover resolution",2,0,"enum",1200,0,1,1,QVariantList{QVariantMap{{"label","500 px"},{"value",500}},QVariantMap{{"label","1200 px"},{"value",1200}},QVariantMap{{"label","2048 px"},{"value",2048}}});
+ S("cover/source","Cover source priority",2,0,"enum","musicbrainz",0,1,1,QVariantList{QVariantMap{{"label","MusicBrainz / CAA"},{"value","musicbrainz"}}});
+ S("cover/cacheMB","Cover cache limit (MB)",5,1,"int",256,32,2048,32);
+ action("refreshCoverArt","Refresh high-resolution cover",2,0);{auto row=out.takeLast().toMap();row["buttonLabel"]=QCoreApplication::translate("Settings","Refresh");out<<row;}
+ action("clearCoverArtCache","Clear cover cache",5,1);{auto row=out.takeLast().toMap();row["buttonLabel"]=QCoreApplication::translate("Settings","Clear");out<<row;}
  S("media/smtc","System media controls",2,2,"bool",true);
  S("info/volume","Phone volume",2,3,"readonly","");
  S("lyrics/online","Online lyrics",3,0,"bool",true);

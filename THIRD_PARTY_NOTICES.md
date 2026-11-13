@@ -57,3 +57,7 @@ linked Qt distribution; no browser runtime is introduced.
 QWindowKit is statically linked to this executable; Qt remains dynamically linked.
 Its Qt private API use is verified against the packaged Qt 6.11.1 build; rebuild
 and rerun native frame checks when updating Qt. See `windows/vendor/qwindowkit/UPSTREAM.md`.
+
+## Optional MusicBrainz / Cover Art Archive services
+
+The cover provider uses the documented [MusicBrainz API](https://musicbrainz.org/doc/MusicBrainz_API) and [Cover Art Archive API](https://musicbrainz.org/doc/Cover_Art_Archive/API). No third-party client code is copied. Cover images are not covered by the MusicBrainz metadata license; copyright stays with the respective owners. API accessibility is not permission for unrestricted image redistribution. Downloaded images are not bundled in the application. See [source rules and verification](docs/high-resolution-covers.md).

@@ -215,6 +215,8 @@ Item {
         case "exportSettings":exportFile.open();break
         case "importSettings":importFile.open();break
         case "exportDiagnostics":diagnosticsFile.open();break
+        case "refreshCoverArt":controller.refreshCoverArt();break
+        case "clearCoverArtCache":controller.clearCoverArtCache();break
         case "clearLyricsCache":cacheDialog.open();break
         case "resetSettings":pendingReset={kind:"all"};resetDialog.open();break
         case "quit":Qt.quit();break

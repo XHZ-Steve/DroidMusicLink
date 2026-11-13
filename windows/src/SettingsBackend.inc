@@ -48,6 +48,7 @@ void Bridge::setSetting(QString key,QVariant value){
  if(key=="lyrics/phoneSource"||key=="lyrics/online"||key=="lyrics/autoMatch"||key=="lyrics/providerPriority"||key=="lyrics/preferredProvider"||key=="lyrics/preferCurrentApp"||key=="lyrics/matchStrategy"||key=="lyrics/crossSourceTranslation"||key.startsWith("lyrics/providers/")){cancelLyricRequest();m_lyricKey.clear();fetchLyrics();}
  if(key=="connection/autoReconnect"&&!value.toBool())m_retry.stop();
  if(key=="theme/source"||key=="theme/brand"){applyTheme();emit changed();}
+ if(key.startsWith("cover/")){m_coverRequestKey.clear();enhanceCover();}
  if(key=="media/smtc")updateNative();if(key.startsWith("lyrics/providers/"))emit lyricProvidersChanged();emit settingsChanged();
 }
 void Bridge::resetSettings(){m_settings.remove("preferences");m_settings.remove("appearance");for(auto defaults=factoryDefaults();auto key:defaults.keys())m_settings.setValue(key,defaults.value(key).toVariant());m_settings.setValue("preferences/lyrics/autoMatchMigration",true);setSetting("general/autostart",false);cancelLyricRequest();m_lyricKey.clear();fetchLyrics();emit settingsChanged();}

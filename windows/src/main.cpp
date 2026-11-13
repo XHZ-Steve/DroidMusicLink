@@ -47,7 +47,7 @@ public:
 int main(int argc,char **argv){
  QElapsedTimer startupClock;startupClock.start();
  QQuickWindow::setDefaultAlphaBuffer(true);
- SetCurrentProcessExplicitAppUserModelID(L"DroidMediaLink.Desktop");LinkApplication app(argc,argv);app.setFont(QFont("Microsoft YaHei UI"));app.setOrganizationName("DroidMediaLink");app.setApplicationName("DroidMediaLink");app.setApplicationVersion("1.0.0");app.setQuitOnLastWindowClosed(false);QQuickStyle::setStyle("Basic");
+ SetCurrentProcessExplicitAppUserModelID(L"DroidMediaLink.Desktop");LinkApplication app(argc,argv);app.setFont(QFont("Microsoft YaHei UI"));app.setOrganizationName("DroidMediaLink");app.setApplicationName("DroidMediaLink");app.setApplicationVersion("1.1.0");app.setQuitOnLastWindowClosed(false);QQuickStyle::setStyle("Basic");
  QString instanceName="DroidMediaLink.primary";
  const int profileIndex=app.arguments().indexOf("--test-profile");
  if(profileIndex>=0&&profileIndex+1<app.arguments().size()){

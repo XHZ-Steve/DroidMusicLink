@@ -41,6 +41,13 @@ public:
   bridge.applyMedia({{"artwork",artwork(Qt::blue)}});if(nativePayload["artworkRevision"]==firstRevision||nativePayload["artworkRevision"].toString().isEmpty())return 72;
   bridge.applyMedia({{"artwork",""}});if(!nativePayload["artwork"].toString().isEmpty()||!nativePayload["artworkRevision"].toString().isEmpty())return 73;
   bridge.m_nativeUpdate=nullptr;
+  QImage highPhone(1600,1600,QImage::Format_RGB32);highPhone.fill(Qt::cyan);QByteArray highBytes;QBuffer highOutput(&highBytes);highOutput.open(QIODevice::WriteOnly);highPhone.save(&highOutput,"PNG");
+  bridge.applyMedia({{"artwork",QString::fromLatin1(highBytes.toBase64())}});if(bridge.m_phonePixels!=QSize(1600,1600)||QImage(QUrl(bridge.artwork()).toLocalFile()).size()!=QSize(1600,1600))return 87;
+  const auto originalCover=bridge.artwork();bridge.m_settings.setValue("preferences/cover/mode","high");bridge.m_coverRequestKey=CoverArtTrack{bridge.title(),bridge.artist(),bridge.album(),bridge.duration()}.key()+"1200high";
+  const auto enhancedPath=bridge.cachePath()+"/covers/TEST-enhanced.png";highPhone.save(enhancedPath);bridge.applyEnhancedCover({enhancedPath,"test","test",QSize(1600,1600),"TEST enhanced digest",false});const auto enhancedCover=bridge.artwork();
+  bridge.applyMedia({{"artwork",QString::fromLatin1(highBytes.toBase64())},{"positionMs",1234}});if(bridge.artwork()!=enhancedCover||bridge.artwork()==originalCover)return 88;
+  bridge.m_settings.setValue("preferences/cover/mode","off");bridge.enhanceCover();if(bridge.artwork()!=originalCover)return 89;
+
   auto write=[&](QString name,QString text){QFile file(files.path()+"/"+name);if(!file.open(QIODevice::WriteOnly))return QUrl();file.write(text.toUtf8());file.close();return QUrl::fromLocalFile(file.fileName());};
   const auto first=write("first.lrc","[00:01.00]TEST FIRST\n[00:05.00]TEST SECOND");
   bridge.importLyrics(first);if(bridge.lyrics().size()!=2)return 2;

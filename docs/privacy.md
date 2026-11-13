@@ -19,3 +19,7 @@ request metadata such as IP address. No lyric corpus is bundled or mirrored.
 Do not forward the phone's listener port to the public internet. The application
 does not configure router port forwarding. Diagnostic screenshots can show track
 names and short-lived comparison codes; review them before sharing.
+
+## Optional high-resolution covers
+
+Cover enhancement is off by default. Enabling it sends song title, artist and album to MusicBrainz, then downloads a trusted canonical front from Cover Art Archive/Internet Archive. Covers remain in a bounded, clearable local cache. Phone-only mode disables enhancement requests. Android does not perform periodic artwork networking. See [implementation and source terms](high-resolution-covers.md).

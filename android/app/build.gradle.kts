@@ -2,7 +2,7 @@ plugins { id("com.android.application"); id("org.jetbrains.kotlin.android"); id(
 android {
  namespace = "org.droidmedialink.android"
  compileSdk = 36
- defaultConfig { applicationId = "org.droidmedialink.android"; minSdk = 26; targetSdk = 36; versionCode = 2; versionName = "1.0.0"; testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner" }
+ defaultConfig { applicationId = "org.droidmedialink.android"; minSdk = 26; targetSdk = 36; versionCode = 3; versionName = "1.1.0"; testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner" }
  signingConfigs {
   val keyPath = providers.environmentVariable("DML_ANDROID_KEYSTORE").orNull
   if(keyPath != null) create("release") {

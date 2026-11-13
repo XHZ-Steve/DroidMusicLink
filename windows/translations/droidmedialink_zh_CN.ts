@@ -2064,6 +2064,17 @@
         <source>High contrast</source>
         <translation>高对比</translation>
     </message>
+<message><source>Cover quality</source><translation>封面画质</translation></message>
+<message><source>Automatic enhancement</source><translation>自动增强</translation></message>
+<message><source>Prefer high resolution</source><translation>优先高清</translation></message>
+<message><source>Use phone artwork only</source><translation>仅使用手机原始封面</translation></message>
+<message><source>Target cover resolution</source><translation>目标封面分辨率</translation></message>
+<message><source>Cover source priority</source><translation>封面来源优先级</translation></message>
+<message><source>Cover cache limit (MB)</source><translation>封面缓存上限（MB）</translation></message>
+<message><source>Refresh high-resolution cover</source><translation>重新获取高清封面</translation></message>
+<message><source>Clear cover cache</source><translation>清理封面缓存</translation></message>
+<message><source>Online enhancement sends song, artist and album metadata to MusicBrainz. Cover images retain their owners' copyrights.</source><translation>联网增强会将歌曲、歌手和专辑信息发送至 MusicBrainz。封面版权归原权利人所有。</translation></message>
+<message><source>Refresh</source><translation>刷新</translation></message>
 </context>
 <context>
     <name>SettingsPage</name>

@@ -23,8 +23,6 @@ import android.view.KeyEvent
 import org.json.*
 import java.io.ByteArrayOutputStream
 import kotlinx.coroutines.*
-import java.net.HttpURLConnection
-import java.net.URL
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 
@@ -87,31 +85,39 @@ class MediaSessionTracker(private val context:Context) {
  private fun encodeBitmap(bitmap:Bitmap,owned:Boolean):String? {
   var small:Bitmap?=null
   try {
-   val scale=minOf(1f,512f/maxOf(bitmap.width,bitmap.height))
+   val scale=minOf(1f,2048f/maxOf(bitmap.width,bitmap.height))
    small=Bitmap.createScaledBitmap(bitmap,maxOf(1,(bitmap.width*scale).toInt()),maxOf(1,(bitmap.height*scale).toInt()),true)
    val out=ByteArrayOutputStream()
-   if(!small.compress(Bitmap.CompressFormat.JPEG,78,out)||out.size()==0||out.size()>256*1024)return null
+   if(!small.compress(Bitmap.CompressFormat.JPEG,92,out)||out.size()==0)return null
+   if(out.size()>1536*1024){out.reset();if(!small.compress(Bitmap.CompressFormat.JPEG,85,out)||out.size()==0||out.size()>1536*1024)return null}
    return Base64.encodeToString(out.toByteArray(),Base64.NO_WRAP)
   }finally{if(small!==bitmap)small?.recycle();if(owned)bitmap.recycle()}
  }
  private fun readArtwork(metadata:MediaMetadata):String? {
   val bitmap=metadata.getBitmap(MediaMetadata.METADATA_KEY_ALBUM_ART)?:metadata.getBitmap(MediaMetadata.METADATA_KEY_ART)?:metadata.getBitmap(MediaMetadata.METADATA_KEY_DISPLAY_ICON)
-  if(bitmap!=null)return encodeBitmap(bitmap,false)
-  val address=metadata.getString(MediaMetadata.METADATA_KEY_ALBUM_ART_URI)?:metadata.getString(MediaMetadata.METADATA_KEY_ART_URI)?:metadata.getString(MediaMetadata.METADATA_KEY_DISPLAY_ICON_URI)?:return null
-  val uri=Uri.parse(address);var connection:HttpURLConnection?=null
-  try {
-   val input=when(uri.scheme){
-    "content","android.resource"->context.contentResolver.openInputStream(uri)
-    "https"->{connection=URL(address).openConnection() as HttpURLConnection;connection!!.connectTimeout=3000;connection!!.readTimeout=3000;connection!!.inputStream}
-    else->null
-   }?:return null
-   val bytes=input.use { stream->val out=ByteArrayOutputStream();val buffer=ByteArray(8192);while(out.size()<=2*1024*1024){val count=stream.read(buffer,0,minOf(buffer.size,2*1024*1024+1-out.size()));if(count<=0)break;out.write(buffer,0,count)};out.toByteArray() };if(bytes.size>2*1024*1024)return null
-   val bounds=BitmapFactory.Options().apply { inJustDecodeBounds=true };BitmapFactory.decodeByteArray(bytes,0,bytes.size,bounds)
-   if(bounds.outWidth<=0||bounds.outHeight<=0||bounds.outWidth>8192||bounds.outHeight>8192)return null
-   val options=BitmapFactory.Options().apply { inSampleSize=1 };while(maxOf(bounds.outWidth,bounds.outHeight)/options.inSampleSize>1024)options.inSampleSize*=2
-   val decoded=BitmapFactory.decodeByteArray(bytes,0,bytes.size,options)?:return null
-   return encodeBitmap(decoded,true)
-  }finally{connection?.disconnect()}
+  var best:ByteArray?=null;var bestExtent=bitmap?.let { maxOf(it.width,it.height) }?:0
+  for(key in listOf(MediaMetadata.METADATA_KEY_ART_URI,MediaMetadata.METADATA_KEY_ALBUM_ART_URI,MediaMetadata.METADATA_KEY_DISPLAY_ICON_URI)) {
+   val address=metadata.getString(key)?:continue
+   val uri=Uri.parse(address);if(uri.scheme !in listOf("content","android.resource"))continue
+   try {
+    val input=context.contentResolver.openInputStream(uri)?:continue
+    val bytes=input.use { it.readBytesBounded(2*1024*1024) }?:continue
+    val bounds=BitmapFactory.Options().apply { inJustDecodeBounds=true };BitmapFactory.decodeByteArray(bytes,0,bytes.size,bounds)
+    if(bounds.outWidth<=0||bounds.outHeight<=0||bounds.outWidth>8192||bounds.outHeight>8192)continue
+    if(maxOf(bounds.outWidth,bounds.outHeight)>=bestExtent){best=bytes;bestExtent=maxOf(bounds.outWidth,bounds.outHeight)}
+   }catch(_:Exception){ /* Try the next published URI, then the supplied Bitmap. */ }
+  }
+  best?.let { bytes ->
+   if(bestExtent<=2048)return Base64.encodeToString(bytes,Base64.NO_WRAP)
+   val options=BitmapFactory.Options().apply { inSampleSize=1 };while(bestExtent/options.inSampleSize>4096)options.inSampleSize*=2
+   BitmapFactory.decodeByteArray(bytes,0,bytes.size,options)?.let { decoded -> encodeBitmap(decoded,true)?.let{return it} }
+  }
+  return bitmap?.let { encodeBitmap(it,false) }
+ }
+ private fun java.io.InputStream.readBytesBounded(limit:Int):ByteArray? {
+  val output=ByteArrayOutputStream();val buffer=ByteArray(8192)
+  while(output.size()<=limit){val count=read(buffer,0,minOf(buffer.size,limit+1-output.size()));if(count<=0)break;output.write(buffer,0,count)}
+  return if(output.size()<=limit)output.toByteArray() else null
  }
  private fun ensureArtwork(c:MediaController,metadata:MediaMetadata?,key:String){
   if(key!=artworkKey){artworkJob?.cancel();artworkJob=null;artworkKey=key;artworkEncoded="";artworkAttempted=false}

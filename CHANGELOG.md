@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.1.0 preview
+
+- Optional MusicBrainz/CAA high-resolution covers with conservative matching, asynchronous decode, bounded song/album cache, phone-only fallback and quality settings.
+- Preserve bounded Android original cover pixels, compare local metadata URIs and deduplicate artwork transmission; no Android artwork network fetching.
+- Keep source service limits, rights notices and exact verification limitations in docs/high-resolution-covers.md.
+
+
 ## 1.0.0 — 2026-11-13
 
 - Android-to-Windows authenticated LAN media synchronization, playback control and SMTC artwork.

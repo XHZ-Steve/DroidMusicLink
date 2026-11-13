@@ -174,3 +174,7 @@ See `windows-refinement-2026-11-12.md` for current integration tests, measured t
 ## Phone lyric source and ui9 interaction regression — 2026-11-13
 
 See [ui9 verification](ui9-phone-lyrics-and-interactions.md) for provider-chain tests, repaired CI assertions, actual packaged runtime evidence and remaining physical-device coverage.
+
+## High-resolution cover preview — 2026-11-13
+
+See [high-resolution covers](high-resolution-covers.md) for exact source rules, controlled matching/cache tests, real CAA pixel comparison, MusicBrainz HTTP 503 limitation, and physical-device coverage.

@@ -1,0 +1,35 @@
+#pragma once
+#include <QObject>
+#include <QJsonObject>
+#include <QNetworkAccessManager>
+#include <QPointer>
+#include <QNetworkReply>
+#include <QImage>
+#include <QTimer>
+#include <functional>
+#include <atomic>
+#include <memory>
+struct CoverArtTrack {QString title,artist,album; qint64 duration=0; QString key()const;};
+struct CoverArtResult {QString path,release,source;QSize pixels;QByteArray digest;bool cached=false;};
+class CoverArtProvider:public QObject {
+public:using Done=std::function<void(QByteArray,QString)>;using QObject::QObject;
+ virtual QString id()const=0;virtual void request(const CoverArtTrack &,int,Done)=0;virtual void cancel()=0;
+};
+class MusicBrainzCoverArtProvider final:public CoverArtProvider {
+ QNetworkAccessManager ownedNetwork;QNetworkAccessManager *network=&ownedNetwork;QPointer<QNetworkReply> reply;QTimer delay; qint64 nextRequest=0;quint64 generation=0;
+ void get(QUrl,bool,std::function<void(QByteArray)>);
+public:explicit MusicBrainzCoverArtProvider(QObject *parent=nullptr,QNetworkAccessManager *transport=nullptr):CoverArtProvider(parent){if(transport)network=transport;}
+ ~MusicBrainzCoverArtProvider()override{cancel();}
+ QString id()const override{return "musicbrainz";}
+ void request(const CoverArtTrack &,int,Done)override;void cancel()override;
+ static QString selectRelease(const CoverArtTrack &,const QJsonObject &);
+};
+class CoverArtService:public QObject {
+ MusicBrainzCoverArtProvider provider;QString directory,activePath;quint64 generation=0;std::shared_ptr<std::atomic<quint64>> epoch=std::make_shared<std::atomic<quint64>>(0);qint64 budget=256*1024*1024;QHash<QString,qint64> failures;
+ void decode(QByteArray,const QString &,QString,int,bool,std::function<void(CoverArtResult)>);
+ void trim();
+public:explicit CoverArtService(QString,QObject *parent=nullptr,QNetworkAccessManager *transport=nullptr);
+ ~CoverArtService()override{cancel();}
+ void cancel();void clear();void setBudget(int mb);qint64 bytes()const;
+ void request(CoverArtTrack,int,bool,std::function<void(CoverArtResult)>);
+};

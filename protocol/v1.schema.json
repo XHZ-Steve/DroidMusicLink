@@ -387,7 +387,7 @@
               },
               "artwork": {
                 "type": "string",
-                "maxLength": 349528
+                "maxLength": 2796204
               },
               "favorite": {
                 "type": "boolean"
