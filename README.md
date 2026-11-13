@@ -1,6 +1,6 @@
 # DroidMediaLink
 
-[English](README.en.md) · [构建说明](docs/build-and-release.md) · [GitHub Actions](https://github.com/XHZ-Steve/DroidMusicLink/actions)
+[下载 v1.0](https://github.com/XHZ-Steve/DroidMusicLink/releases/tag/v1.0) · [English](README.en.md) · [构建说明](docs/build-and-release.md) · [GitHub Actions](https://github.com/XHZ-Steve/DroidMusicLink/actions)
 
 将 Android 正在播放的音乐带到 Windows 桌面：同步歌曲、封面和进度，控制手机播放，显示同步歌词，并接入 Windows 系统媒体控件。音频仍由手机和原有耳机播放，不进行音频串流。
 
@@ -28,7 +28,7 @@ Android 实机截图已裁去状态栏；截图与 Windows 画面拍摄于不同
 
 ## 开始使用
 
-1. 从 [Actions 构建产物](https://github.com/XHZ-Steve/DroidMusicLink/actions) 获取 Windows 包和 Android APK，完整解压 Windows 便携包。
+1. 从 [v1.0 Release](https://github.com/XHZ-Steve/DroidMusicLink/releases/tag/v1.0) 下载 Windows 安装包或便携包，以及 Android APK；使用便携版时完整解压。
 2. 手机安装 APK，按照首次引导授权通知使用权与必要后台权限，开启连接服务。
 3. 两端连接同一局域网，在电脑设置的“设备与连接”中搜索手机，核对两端数字并在手机确认。
 4. 在手机原来的音乐 App 中播放；之后可从电脑控制。关闭主窗口后可通过托盘返回。

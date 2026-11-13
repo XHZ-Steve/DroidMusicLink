@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.0.0 — 2026-11-13
+
+- Android-to-Windows authenticated LAN media synchronization, playback control and SMTC artwork.
+- Automatic multi-source lyrics, player-published phone lyrics and translation supplementation.
+- Ambient artwork colors, optional Liquid Glass, capsule Dock and transparent desktop widgets.
+- Persistent settings, current factory preferences and drag-time UI refresh suspension.
+- Real-device screenshots and Windows demonstration in bilingual READMEs.
+
+
 ## 0.1.0 — development build
 
 - Android passive TLS/WebSocket service, NSD advertisement and media-session callbacks.

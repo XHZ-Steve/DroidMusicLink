@@ -1,4 +1,4 @@
-﻿param([Parameter(Mandatory)][string]$QtPath, [string]$BuildDirectory = "$PSScriptRoot/../build/windows", [string]$Version = '0.1.0', [string]$CompilerPath = '')
+﻿param([Parameter(Mandatory)][string]$QtPath, [string]$BuildDirectory = "$PSScriptRoot/../build/windows", [string]$Version = '1.0.0', [string]$CompilerPath = '')
 $ErrorActionPreference = 'Stop'
 $root = (Resolve-Path "$PSScriptRoot/..").Path
 $stage = "$root/artifacts/DroidMediaLink-$Version-windows-x64"

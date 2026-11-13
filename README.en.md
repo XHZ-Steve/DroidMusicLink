@@ -1,6 +1,6 @@
 # DroidMediaLink
 
-[简体中文](README.md) · [Build instructions](docs/build-and-release.md) · [CI builds](https://github.com/XHZ-Steve/DroidMusicLink/actions)
+[Download v1.0](https://github.com/XHZ-Steve/DroidMusicLink/releases/tag/v1.0) · [简体中文](README.md) · [Build instructions](docs/build-and-release.md) · [CI builds](https://github.com/XHZ-Steve/DroidMusicLink/actions)
 
 Bring your Android media session to Windows: artwork, playback controls, synchronized lyrics and Windows system media controls. Audio stays on your phone and its headphones; this is not an audio-streaming application.
 
@@ -27,7 +27,7 @@ UI state updates pause during native window/component dragging and catch up on r
 
 ## Get started
 
-1. Download Windows and Android artifacts from [GitHub Actions](https://github.com/XHZ-Steve/DroidMusicLink/actions). Extract the complete Windows portable archive.
+1. Download the Windows installer/portable package and Android APK from [v1.0 Release](https://github.com/XHZ-Steve/DroidMusicLink/releases/tag/v1.0). Extract the complete Windows portable archive.
 2. Install the Android APK, complete permission onboarding and enable the connection service.
 3. Put both devices on the same LAN. Find your phone in Windows Settings → Devices and connection, compare the numbers, and approve on the phone.
 4. Play music in your existing Android player. Control it from Windows; use the tray to reopen the main window.
