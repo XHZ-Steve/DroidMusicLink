@@ -80,7 +80,7 @@ void CoverArtService::decode(QByteArray data,const QString &key,QString release,
   if(!cached){if(guard->load()!=token)return result;QSaveFile file(path);if(!file.open(QIODevice::WriteOnly)||!image.save(&file,"PNG")||guard->load()!=token||!file.commit())return result;}
   const auto thumbnail=path+".smtc.jpg";QSaveFile small(thumbnail);
   if(guard->load()!=token||!small.open(QIODevice::WriteOnly)||!image.scaled(512,512,Qt::KeepAspectRatio,Qt::SmoothTransformation).save(&small,"JPEG",90)||guard->load()!=token||!small.commit())return result;
-  result={path,release,"musicbrainz",image.size(),QCryptographicHash::hash(data,QCryptographicHash::Sha256),cached,thumbnail};return result;
+  result={path,release,"musicbrainz",image.size(),QCryptographicHash::hash(data,QCryptographicHash::Sha256),cached,thumbnail,CoverPalette::fromImage(image)};return result;
  }));
 }
 void CoverArtService::request(CoverArtTrack track,int resolution,bool refresh,std::function<void(CoverArtResult)> done){
@@ -94,4 +94,23 @@ void CoverArtService::request(CoverArtTrack track,int resolution,bool refresh,st
  if(refresh){QFile::remove(mapping);failures.remove(key);}
  QFile file(mapping);if(!refresh&&file.open(QIODevice::ReadOnly)&&file.size()<16384){auto info=QJsonDocument::fromJson(file.readAll()).object();auto id=info["release"].toString();if(validId(id)&&QDateTime::currentMSecsSinceEpoch()-info["created"].toInteger()<30LL*86400000){QFileInfo image(directory+"/"+hash(id+QString::number(resolution))+".png");if(image.isFile()&&image.size()<=32*1024*1024){decode({},key,id,resolution,true,[this,id,resolution,fetch,done](CoverArtResult result){if(result.path.isEmpty()){QFile::remove(directory+"/"+hash(id+QString::number(resolution))+".png");fetch();}else done(result);});return;}}}
  fetch();
+}
+
+bool PublishedCoverArtProvider::trusted(QUrl url){
+ if(url.scheme()!="https"||!url.userInfo().isEmpty()||(url.port()!=-1&&url.port()!=443)||url.toString().size()>4096)return false;
+ const auto host=url.host().toLower();
+ for(const auto &domain:QStringList{"music.126.net","gtimg.cn","qpic.cn","qq.com","kugou.com","kuwo.cn","scdn.co","spotifycdn.com","mzstatic.com","media-amazon.com","dzcdn.net","ytimg.com","googleusercontent.com","ggpht.com","resources.tidal.com","static.qobuz.com","sndcdn.com","bcbits.com","coverartarchive.org","archive.org"})if(host==domain||host.endsWith("."+domain))return true;
+ return false;
+}
+void PublishedCoverArtProvider::cancel(){++generation;if(reply)reply->abort();reply=nullptr;}
+void PublishedCoverArtProvider::request(const CoverArtTrack &track,int resolution,Done done){
+ cancel();const auto token=generation;const QUrl url(track.uri);if(!trusted(url)){done({},{},false);return;}
+ QNetworkRequest req(url);req.setRawHeader("User-Agent",("DroidMediaLink/"+QCoreApplication::applicationVersion()+" (https://github.com/XHZ-Steve/DroidMusicLink)").toUtf8());req.setTransferTimeout(10000);req.setAttribute(QNetworkRequest::RedirectPolicyAttribute,QNetworkRequest::UserVerifiedRedirectPolicy);
+ auto r=network->get(req);reply=r;QTimer::singleShot(15000,r,[r]{if(!r->isFinished())r->abort();});
+ connect(r,&QNetworkReply::redirected,r,[r](QUrl next){if(trusted(next))r->redirectAllowed();else r->abort();});
+ connect(r,&QNetworkReply::downloadProgress,r,[r](qint64 n,qint64 total){if(n>2*1024*1024||total>2*1024*1024)r->abort();});
+ connect(r,&QNetworkReply::finished,this,[this,r,token,resolution,done]{auto bytes=r->isOpen()?r->read(2*1024*1024+1):QByteArray{};const bool ok=r->error()==QNetworkReply::NoError&&r->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt()==200&&bytes.size()<=2*1024*1024;r->deleteLater();if(reply==r)reply=nullptr;if(token!=generation)return;if(!ok){done({},{},false);return;}
+  auto watcher=new QFutureWatcher<QByteArray>(this);connect(watcher,&QFutureWatcher<QByteArray>::finished,this,[this,watcher,token,done]{auto image=watcher->result();watcher->deleteLater();if(token==generation)done(image,{},false);});
+  watcher->setFuture(QtConcurrent::run([bytes,resolution]{QBuffer input;input.setData(bytes);input.open(QIODevice::ReadOnly);QImageReader reader(&input);auto size=reader.size();if(!size.isValid()||size.width()>8192||size.height()>8192||qint64(size.width())*size.height()>16777216)return QByteArray{};auto image=reader.read();if(image.isNull())return QByteArray{};const int limit=qBound(500,resolution,2048);if(qMax(size.width(),size.height())<=limit)return bytes;image=image.scaled(limit,limit,Qt::KeepAspectRatio,Qt::SmoothTransformation);QByteArray encoded;QBuffer out(&encoded);out.open(QIODevice::WriteOnly);if(!image.save(&out,"JPEG",92)||encoded.size()>2*1024*1024)return QByteArray{};return encoded;}));
+ });
 }

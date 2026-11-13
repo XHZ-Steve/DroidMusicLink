@@ -23,3 +23,5 @@ names and short-lived comparison codes; review them before sharing.
 ## Optional high-resolution covers
 
 Cover enhancement is off by default. Enabling it sends song title, artist and album to MusicBrainz, then downloads a trusted canonical front from Cover Art Archive/Internet Archive. Covers remain in a bounded, clearable local cache. Phone-only mode disables enhancement requests. Android does not perform periodic artwork networking. See [implementation and source terms](high-resolution-covers.md).
+
+Player-published HTTPS original artwork URIs may be fetched on Windows when needed, even with metadata-search enhancement disabled. Only approved music-image CDN/CAA hosts and HTTPS redirects are accepted. Original URIs are not written into diagnostic logs, source control or the native SMTC payload. This replaces the previous Android-side URI fetching; original-image fallback is distinct from optional MusicBrainz metadata search.

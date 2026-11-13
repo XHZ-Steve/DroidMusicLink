@@ -59,6 +59,11 @@ int main(int argc,char **argv){
 #ifdef Q_OS_WIN
  PROCESS_MEMORY_COUNTERS memory{};GetProcessMemoryInfo(GetCurrentProcess(),&memory,sizeof(memory));qInfo()<<"Worker test working set MiB"<<memory.WorkingSetSize/(1024.*1024)<<"peak MiB"<<memory.PeakWorkingSetSize/(1024.*1024);
 #endif
+ for(const auto &uri:QStringList{"http://p1.music.126.net/test","https://127.0.0.1/test","file:///test","https://attacker.invalid/test","https://user:password@p1.music.126.net/test"})if(PublishedCoverArtProvider::trusted(QUrl(uri)))return 15;
+ PublishedCoverArtProvider originalUri(nullptr,&network);CoverArtTrack uriTrack=track;uriTrack.uri="https://p1.music.126.net/TEST-original";corrupt=false;
+ QByteArray originalBytes;bool originalDone=false;QEventLoop originalWait;originalUri.request(uriTrack,2048,[&](QByteArray data,QString,bool){originalBytes=data;originalDone=true;originalWait.quit();});QTimer::singleShot(5000,&originalWait,&QEventLoop::quit);if(!originalDone)originalWait.exec();if(originalBytes!=png)return 16;
+ originalDone=false;originalUri.request(uriTrack,2048,[&](QByteArray,QString,bool){originalDone=true;});originalUri.cancel();QEventLoop cancelledOriginal;QTimer::singleShot(100,&cancelledOriginal,&QEventLoop::quit);cancelledOriginal.exec();if(originalDone)return 17;
+ qInfo()<<"PASS published HTTPS original URI, untrusted origin rejection and stale original callback cancellation";
  service.cancel();qInfo()<<"PASS matching (6 rejection cases), decoding, album/song cache hits, corrupt download fallback and cache clear";
  if(app.arguments().contains("--live")){
   CoverArtService live(directory.path()+"/live");CoverArtTrack actual{"The Scientist","Coldplay","A Rush of Blood to the Head",309000};QEventLoop wait;bool completed=false;live.request(actual,1200,false,[&](CoverArtResult r){result=r;completed=true;wait.quit();});QTimer::singleShot(45000,&wait,&QEventLoop::quit);wait.exec();

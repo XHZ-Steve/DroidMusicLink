@@ -48,6 +48,8 @@ public:
   bridge.applyMedia({{"artwork",QString::fromLatin1(highBytes.toBase64())},{"positionMs",1234}});if(bridge.artwork()!=enhancedCover||bridge.artwork()==originalCover)return 88;
   QImage latePhone(2048,2048,QImage::Format_RGB32);latePhone.fill(Qt::cyan);QByteArray lateBytes;QBuffer lateOutput(&lateBytes);lateOutput.open(QIODevice::WriteOnly);latePhone.save(&lateOutput,"PNG");bridge.applyMedia({{"artwork",QString::fromLatin1(lateBytes.toBase64())}});if(bridge.artwork()==enhancedCover||bridge.m_phonePixels!=QSize(2048,2048))return 91;originalCover=bridge.artwork();
   bridge.m_settings.setValue("preferences/cover/mode","off");bridge.enhanceCover();if(bridge.artwork()!=originalCover)return 89;bridge.m_nativeUpdate=nullptr;
+  bridge.m_publishedCoverActive=true;bridge.m_receivedArtworkDigest.clear();bridge.applyMedia({{"artwork",""}});if(bridge.artwork()!=originalCover)return 92;
+  bridge.applyMedia({{"sessionId","TEST new publisher"},{"artwork",artwork(Qt::red)}});if(bridge.m_phonePixels!=QSize(12,12)||bridge.m_publishedCoverActive)return 93;
 
   auto write=[&](QString name,QString text){QFile file(files.path()+"/"+name);if(!file.open(QIODevice::WriteOnly))return QUrl();file.write(text.toUtf8());file.close();return QUrl::fromLocalFile(file.fileName());};
   const auto first=write("first.lrc","[00:01.00]TEST FIRST\n[00:05.00]TEST SECOND");

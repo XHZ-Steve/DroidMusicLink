@@ -395,6 +395,7 @@
               "favoriteKnown": {
                 "type": "boolean"
               },
+              "artworkUri": {"type": "string", "maxLength": 4096},
               "phoneTranslation": {"type": "string", "maxLength": 65536},
               "phoneLyrics": {
                 "type": "string",

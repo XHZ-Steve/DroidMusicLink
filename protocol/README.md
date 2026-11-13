@@ -91,3 +91,5 @@ player, and does not authorize reading notification text or private files.
 `phoneTranslation` optionally carries timestamped translation published alongside `phoneLyrics`. Their combined UTF-8 size is limited to 64 KiB. Both fields are sent together when the lyric identity/content changes; absence preserves the current snapshot. Translation alignment is validated against the original timeline before supplementation.
 
 Artwork snapshots permit up to 2 MiB decoded image bytes (2796204 Base64 characters), within the existing 4 MiB transport frame limit. A connection may omit unchanged artwork; absence preserves the current artwork, while an explicit empty value clears it. A new song identity clears stale artwork even if omitted. Android sends full artwork on first publication to each connection and deduplicates unchanged subsequent snapshots.
+
+Optional artworkUri carries a player-published HTTPS artwork URI (up to 4096 characters). Windows can retrieve trusted original artwork without asking Android to make image-network requests; omitted URIs preserve the existing field, while empty clears the published URI. URI content is not a control instruction.

@@ -48,6 +48,10 @@ class MediaSessionTracker(private val context:Context) {
  private var receivingVolume=false
  private var lastVolume=""
  private var artworkKey=""
+ private var artworkUpgrade=false
+ private var artworkBitmapAttempt=0f
+ private var artworkRetryAfter=0L
+ private var artworkQuality=0f
  private var artworkEncoded=""
  private var artworkAttempted=false
  private var artworkJob:Job?=null
@@ -82,7 +86,10 @@ class MediaSessionTracker(private val context:Context) {
   state.put("positionMs",position.coerceAtLeast(0)).put("speed",speed).put("state",if(playback?.state==PlaybackState.STATE_PLAYING)"playing" else if(playback?.state==PlaybackState.STATE_PAUSED)"paused" else "stopped")
   Hub.media.value=state;Hub.broadcastVolume?.invoke(data)
  }
- private fun encodeBitmap(bitmap:Bitmap,owned:Boolean):String? {
+ private fun artworkQuality(width:Int,height:Int):Float=minOf(width,height)*minOf(1f,2048f/maxOf(1,width,height))
+ private fun metadataBitmaps(metadata:MediaMetadata)=listOf(MediaMetadata.METADATA_KEY_ALBUM_ART,MediaMetadata.METADATA_KEY_ART,MediaMetadata.METADATA_KEY_DISPLAY_ICON).mapNotNull { key -> runCatching { metadata.getBitmap(key) }.getOrNull() }.filter { !it.isRecycled&&it.width>0&&it.height>0 }
+ private data class EncodedArtwork(val text:String,val quality:Float)
+ private fun encodeBitmap(bitmap:Bitmap,owned:Boolean):EncodedArtwork? {
   var small:Bitmap?=null
   try {
    val scale=minOf(1f,2048f/maxOf(bitmap.width,bitmap.height))
@@ -90,13 +97,13 @@ class MediaSessionTracker(private val context:Context) {
    val out=ByteArrayOutputStream()
    if(!small.compress(Bitmap.CompressFormat.JPEG,92,out)||out.size()==0)return null
    if(out.size()>1536*1024){out.reset();if(!small.compress(Bitmap.CompressFormat.JPEG,85,out)||out.size()==0||out.size()>1536*1024)return null}
-   return Base64.encodeToString(out.toByteArray(),Base64.NO_WRAP)
+   return EncodedArtwork(Base64.encodeToString(out.toByteArray(),Base64.NO_WRAP),minOf(small.width,small.height).toFloat())
   }finally{if(small!==bitmap)small?.recycle();if(owned)bitmap.recycle()}
  }
- private fun readArtwork(metadata:MediaMetadata):String? {
-  val bitmap=metadata.getBitmap(MediaMetadata.METADATA_KEY_ALBUM_ART)?:metadata.getBitmap(MediaMetadata.METADATA_KEY_ART)?:metadata.getBitmap(MediaMetadata.METADATA_KEY_DISPLAY_ICON)
-  var best:ByteArray?=null;var bestExtent=bitmap?.let { maxOf(it.width,it.height) }?:0
-  for(key in listOf(MediaMetadata.METADATA_KEY_ART_URI,MediaMetadata.METADATA_KEY_ALBUM_ART_URI,MediaMetadata.METADATA_KEY_DISPLAY_ICON_URI)) {
+ private fun readArtwork(metadata:MediaMetadata):EncodedArtwork? {
+  val bitmap=metadataBitmaps(metadata).maxByOrNull { artworkQuality(it.width,it.height) }
+  var best:ByteArray?=null;var bestExtent=0;var bestQuality=bitmap?.let { artworkQuality(it.width,it.height) }?:0f
+  for(key in listOf(MediaMetadata.METADATA_KEY_ALBUM_ART_URI,MediaMetadata.METADATA_KEY_ART_URI,MediaMetadata.METADATA_KEY_DISPLAY_ICON_URI)) {
    val address=metadata.getString(key)?:continue
    val uri=Uri.parse(address);if(uri.scheme !in listOf("content","android.resource"))continue
    try {
@@ -104,11 +111,12 @@ class MediaSessionTracker(private val context:Context) {
     val bytes=input.use { it.readBytesBounded(2*1024*1024) }?:continue
     val bounds=BitmapFactory.Options().apply { inJustDecodeBounds=true };BitmapFactory.decodeByteArray(bytes,0,bytes.size,bounds)
     if(bounds.outWidth<=0||bounds.outHeight<=0||bounds.outWidth>8192||bounds.outHeight>8192)continue
-    if(maxOf(bounds.outWidth,bounds.outHeight)>=bestExtent){best=bytes;bestExtent=maxOf(bounds.outWidth,bounds.outHeight)}
+    val quality=artworkQuality(bounds.outWidth,bounds.outHeight)
+    if(quality>bestQuality||(best==null&&quality==bestQuality&&maxOf(bounds.outWidth,bounds.outHeight)<=2048)){best=bytes;bestExtent=maxOf(bounds.outWidth,bounds.outHeight);bestQuality=quality}
    }catch(_:Exception){ /* Try the next published URI, then the supplied Bitmap. */ }
   }
   best?.let { bytes ->
-   if(bestExtent<=2048)return Base64.encodeToString(bytes,Base64.NO_WRAP)
+   if(bestExtent<=2048)return EncodedArtwork(Base64.encodeToString(bytes,Base64.NO_WRAP),bestQuality)
    val options=BitmapFactory.Options().apply { inSampleSize=1 };while(bestExtent/options.inSampleSize>4096)options.inSampleSize*=2
    BitmapFactory.decodeByteArray(bytes,0,bytes.size,options)?.let { decoded -> encodeBitmap(decoded,true)?.let{return it} }
   }
@@ -120,8 +128,9 @@ class MediaSessionTracker(private val context:Context) {
   return if(output.size()<=limit)output.toByteArray() else null
  }
  private fun ensureArtwork(c:MediaController,metadata:MediaMetadata?,key:String){
-  if(key!=artworkKey){artworkJob?.cancel();artworkJob=null;artworkKey=key;artworkEncoded="";artworkAttempted=false}
-  if(artworkEncoded.isNotEmpty()||artworkAttempted||artworkJob?.isActive==true)return
+  if(key!=artworkKey){artworkJob?.cancel();artworkJob=null;artworkKey=key;artworkUpgrade=false;artworkBitmapAttempt=0f;artworkRetryAfter=0L;artworkQuality=0f;artworkEncoded="";artworkAttempted=false}
+  if((artworkEncoded.isNotEmpty()&&!artworkUpgrade)||artworkAttempted||artworkJob?.isActive==true||android.os.SystemClock.elapsedRealtime()<artworkRetryAfter)return
+  artworkUpgrade=false
   artworkAttempted=true
   artworkJob=Hub.scope.launch {
    for(wait in listOf(0L,600L,1800L,4500L)){
@@ -130,8 +139,9 @@ class MediaSessionTracker(private val context:Context) {
     val snapshot=c.metadata?:metadata
     val encoded=try{withContext(Dispatchers.IO){snapshot?.let { readArtwork(it) }}}catch(cancelled:CancellationException){throw cancelled}catch(_:Exception){null}
     if(artworkKey!=key||current?.sessionToken!=c.sessionToken)return@launch
-    if(!encoded.isNullOrEmpty()){artworkEncoded=encoded;publish();return@launch}
+    if(encoded!=null&&encoded.text.isNotEmpty()){artworkQuality=encoded.quality;artworkEncoded=encoded.text;artworkRetryAfter=0L;publish();return@launch}
    }
+   if(artworkKey==key)artworkRetryAfter=android.os.SystemClock.elapsedRealtime()+30000L
   }
  }
 
@@ -167,7 +177,14 @@ class MediaSessionTracker(private val context:Context) {
   sessions.forEach { c ->
    val cb = object: MediaController.Callback() {
     override fun onExtrasChanged(extras:Bundle?){publish()}
-    override fun onMetadataChanged(metadata: MediaMetadata?) { if(current?.sessionToken==c.sessionToken&&artworkEncoded.isEmpty()){artworkJob?.cancel();artworkJob=null;artworkAttempted=false};publish() }
+    override fun onMetadataChanged(metadata: MediaMetadata?) {
+     if(current?.sessionToken==c.sessionToken){
+      val quality=metadata?.let { metadataBitmaps(it).maxOfOrNull { bitmap -> artworkQuality(bitmap.width,bitmap.height) } }?:0f
+      if(quality>maxOf(artworkQuality,artworkBitmapAttempt)+1f){artworkBitmapAttempt=quality;artworkUpgrade=true;artworkRetryAfter=0L;artworkJob?.cancel();artworkJob=null;artworkAttempted=false}
+      else if(artworkEncoded.isEmpty()&&artworkJob?.isActive!=true)artworkAttempted=false
+     }
+     publish()
+    }
     override fun onPlaybackStateChanged(state: PlaybackState?) = publish()
     override fun onAudioInfoChanged(info: MediaController.PlaybackInfo) { if(current?.sessionToken==c.sessionToken)publishVolume(true,info) }
     override fun onSessionDestroyed() { controllers.remove(c); publish() }
@@ -183,9 +200,9 @@ class MediaSessionTracker(private val context:Context) {
   Hub.sources.value = controllers.keys.map { it.packageName to appName(it) }
   val c=current
   if(c==null) {
-   artworkJob?.cancel();artworkJob=null;artworkKey="";artworkEncoded="";artworkAttempted=false;lastVolume=""
+   artworkJob?.cancel();artworkJob=null;artworkKey="";artworkUpgrade=false;artworkBitmapAttempt=0f;artworkRetryAfter=0L;artworkQuality=0f;artworkEncoded="";artworkAttempted=false;lastVolume=""
    val data=JSONObject().put("state","stopped").put("commands",JSONArray(if(canUseSystemKeys())MediaCommands.basic else emptyList<String>()))
-   for(key in listOf("title","artist","album","appName","packageName","sessionId","artwork"))data.put(key,"")
+   for(key in listOf("title","artist","album","appName","packageName","sessionId","artwork","artworkUri"))data.put(key,"")
    for(key in listOf("durationMs","positionMs","speed","volume","maxVolume"))data.put(key,0)
    data.put("favorite",false).put("favoriteKnown",false).put("phoneLyrics","").put("phoneTranslation","")
    Hub.media.value=data;Hub.broadcast?.invoke(data);return
@@ -214,6 +231,8 @@ class MediaSessionTracker(private val context:Context) {
   val volume=volumeState(c.playbackInfo);data.put("volume",volume.optInt("volume")).put("maxVolume",volume.optInt("maxVolume"))
   val key="${c.sessionToken.hashCode()}:${data.optString("title")}:${data.optString("artist")}:${data.optString("album")}:${m?.getString(MediaMetadata.METADATA_KEY_ALBUM_ART_URI)}:${m?.getString(MediaMetadata.METADATA_KEY_ART_URI)}:${m?.getString(MediaMetadata.METADATA_KEY_DISPLAY_ICON_URI)}"
   ensureArtwork(c,m,key)
+  val publishedUri=listOf(MediaMetadata.METADATA_KEY_ART_URI,MediaMetadata.METADATA_KEY_ALBUM_ART_URI,MediaMetadata.METADATA_KEY_DISPLAY_ICON_URI).mapNotNull { key -> m?.getString(key) }.firstOrNull { address -> address.length<=4096&&runCatching { Uri.parse(address).scheme=="https" }.getOrDefault(false) }.orEmpty()
+  data.put("artworkUri",publishedUri)
   data.put("artwork",artworkEncoded)
 
   Hub.media.value=data;Hub.broadcast?.invoke(data)
