@@ -35,6 +35,10 @@ Item {
     signal searchDevicesRequested()
     signal forgetDeviceRequested(string url)
     signal actionRequested(string key)
+    property int pendingGroup:initialGroup
+    function requestCategory(group){pendingGroup=group;Qt.callLater(applyCategory)}
+    function applyCategory(){if(activeGroup===pendingGroup)return;activeGroup=pendingGroup;activeSection=0;searchField.clear()}
+    function animateCategory(){const interrupted=categoryMotion.running;categoryMotion.stop();if(!interrupted){contentScroll.opacity=.84;categoryOffset.y=6}categoryMotion.start()}
     property int activeGroup: initialGroup
     property int activeSection: initialSection
     property string appearanceScope: "global"
@@ -97,7 +101,7 @@ Item {
     }
     onInitialGroupChanged: if(componentReady)navigate(initialGroup,0)
     onInitialSectionChanged: if(componentReady)navigate(activeGroup,initialSection)
-    onActiveGroupChanged:if(componentReady){rememberCategory();if(motion&&visible)categoryMotion.restart()}
+    onActiveGroupChanged:if(componentReady){rememberCategory();if(motion&&visible)animateCategory()}
     onVisibleChanged:if(!visible){categoryMotion.stop();contentScroll.opacity=1;categoryOffset.y=0}
     onActiveSectionChanged: {if(activeGroup===4)appearanceScope=scopeFor(activeSection)}
     onAppearanceScopeChanged: {
@@ -244,7 +248,33 @@ Item {
         background:Rectangle{radius:tokens.radius;color:choice.pressed?tokens.pressed:Qt.rgba(tokens.elevated.r,tokens.elevated.g,tokens.elevated.b,page.light?.54:.40);border.width:1;border.color:choice.visualFocus?page.accent:tokens.border}
         contentItem:Label{leftPadding:10;rightPadding:30;text:choice.displayText;textFormat:Text.PlainText;color:page.textColor;verticalAlignment:Text.AlignVCenter;elide:Text.ElideRight;font:choice.font}
         indicator:Text{x:choice.width-width-11;y:(choice.height-height)/2;text:Icons.glyph("chevron-down");font.family:lucide.name;font.pixelSize:14;color:tokens.secondaryText}
-        delegate:ItemDelegate{required property var modelData;required property int index;width:choice.width;height:38;text:modelData.label;highlighted:choice.highlightedIndex===index;contentItem:Label{text:parent.text;textFormat:Text.PlainText;color:page.textColor;verticalAlignment:Text.AlignVCenter;leftPadding:10;elide:Text.ElideRight}background:Rectangle{color:parent.highlighted?tokens.selected:parent.hovered?tokens.hover:tokens.elevated}}
+        delegate:ItemDelegate {
+            id:choiceOption;required property var modelData;required property int index
+            width:choice.popup.availableWidth;implicitHeight:38;text:modelData.label
+            highlighted:choice.highlightedIndex===index
+            contentItem:RowLayout {
+                Label{Layout.fillWidth:true;text:choiceOption.text;textFormat:Text.PlainText;color:page.textColor;elide:Text.ElideRight;leftPadding:8;verticalAlignment:Text.AlignVCenter}
+                Text{text:Icons.glyph("check");visible:choice.currentIndex===choiceOption.index;font.family:lucide.name;font.pixelSize:14;color:page.accent;rightPadding:8}
+            }
+            background:Rectangle{radius:8;color:choiceOption.down?tokens.pressed:choiceOption.highlighted?tokens.selected:choiceOption.hovered?tokens.hover:"transparent"}
+        }
+        popup:Popup {
+            id:choiceMenu;popupType:Popup.Item;y:choice.height+6;width:Math.max(180,choice.width);padding:6
+            implicitHeight:Math.min(288,contentItem.implicitHeight+12)
+            closePolicy:Popup.CloseOnEscape|Popup.CloseOnPressOutside
+            contentItem:ListView {
+                implicitHeight:contentHeight;clip:true;spacing:2;model:choiceMenu.visible?choice.delegateModel:null
+                currentIndex:choice.highlightedIndex;highlightMoveDuration:0
+                ScrollIndicator.vertical:ScrollIndicator{}
+            }
+            background:GlassMaterial {
+                sourceItem:page.materialSource;glassEnabled:page.value("appearance/style","liquid")==="liquid";active:choiceMenu.visible&&page.visible;motion:page.motion
+                configuration:{page.settingsRevision;return page.controller?page.controller.appearanceConfig("popup"):({})}
+                cornerRadius:16;dark:!page.light;backdropColor:tokens.base;tintColor:tokens.elevated;fallbackColor:tokens.elevated
+            }
+            enter:Transition{NumberAnimation{property:"opacity";from:0;to:1;duration:page.motion?130:0;easing.type:Easing.OutCubic}}
+            exit:Transition{NumberAnimation{property:"opacity";to:0;duration:page.motion?90:0}}
+        }
     }
     component Toggle: Switch {
         id:toggle
@@ -535,7 +565,7 @@ Item {
         Flow {
             Layout.fillWidth:true;spacing:6
             Repeater {model:page.groupNames
-                FlatButton{required property int index;required property string modelData;objectName:"settings-category-"+index;text:modelData;capsule:true;frosted:true;checked:page.activeGroup===index;onClicked:{page.activeGroup=index;page.activeSection=0;searchField.clear()}}
+                FlatButton{required property int index;required property string modelData;objectName:"settings-category-"+index;text:modelData;capsule:true;frosted:true;checked:page.activeGroup===index;onClicked:page.requestCategory(index)}
             }
         }
         ScrollView {
@@ -566,8 +596,8 @@ Item {
     }
     ParallelAnimation {
         id:categoryMotion
-        NumberAnimation{target:contentScroll;property:"opacity";from:0;to:1;duration:170;easing.type:Easing.OutCubic}
-        NumberAnimation{target:categoryOffset;property:"y";from:10;to:0;duration:210;easing.type:Easing.OutCubic}
+        NumberAnimation{target:contentScroll;property:"opacity";to:1;duration:150;easing.type:Easing.OutCubic}
+        NumberAnimation{target:categoryOffset;property:"y";to:0;duration:190;easing.type:Easing.OutCubic}
     }
     Dialog {
         id:resetDialog;title:qsTr("Restore defaults?");modal:true;anchors.centerIn:Overlay.overlay;width:Math.min(420,page.width-24)
