@@ -24,7 +24,7 @@ Item {
     UI.NowPlayingCanvas{id:canvas;anchors.fill:parent;controller:controller;settingsRevision:controller.revision;motion:true}
     TestCase {
         name:"NowPlayingLayouts";when:windowShown
-        function init(){controller.title="TEST album title";controller.artist="TEST artist";controller.appName="TEST player";controller.setSetting("home/layout",0);wait(550)}
+        function init(){const clean=Object.assign({},controller.values);Object.keys(clean).forEach(function(key){if(key.indexOf("home/layouts/")===0)delete clean[key]});controller.values=clean;controller.revision++;controller.title="TEST album title";controller.artist="TEST artist";controller.appName="TEST player";controller.setSetting("home/layout",0);wait(550)}
         function test_cover_cycles_three_persistent_modes(){
             const cover=findChild(canvas,"heroArtwork");const control=findChild(canvas,"coverLayoutSwitch");const lyrics=findChild(canvas,"homeLyrics")
             verify(cover);verify(control);verify(lyrics);compare(canvas.mode,0);compare(findChild(lyrics,"compactHomeLyrics").compact,true)
@@ -125,6 +125,49 @@ Item {
         function test_track_update_invalidates_pending_layout_callback(){
             canvas.nextLayout();controller.title="TEST a newly delivered media title";wait(80)
             compare(canvas.changingLayout,false);compare(canvas.transitionProgress,1)
+        }
+        function test_title_and_lyric_ink_share_left_edge(){
+            controller.setSetting("home/layout",2);controller.setSetting("home/layouts/2/alignment","left");wait(550)
+            const title=findChild(canvas,"trackTitle"),view=findChild(canvas,"expandedHomeLyrics"),timeline=findChild(view,"lyricTimeline")
+            tryVerify(function(){return timeline.itemAtIndex(0)!==null})
+            const flow=findChild(timeline.itemAtIndex(0),"lyricWords")
+            const glyph=flow.children.filter(function(item){return item.objectName==="lyricGlyph"})[0]
+            verify(Math.abs(glyph.mapToItem(canvas,0,0).x-title.mapToItem(canvas,0,0).x)<1)
+        }
+        function test_alignment_presets_share_transition_clock(){
+            controller.setSetting("home/layout",2);controller.setSetting("home/layouts/2/alignment","left");wait(550)
+            const title=findChild(canvas,"trackTitle"),view=findChild(canvas,"expandedHomeLyrics")
+            const before=title.mapToItem(canvas,0,0).x
+            controller.setSetting("home/layouts/2/alignment","right")
+            verify(Math.abs(title.mapToItem(canvas,0,0).x-before)<1,"Preset must not jump before animation starts")
+            wait(70);verify(canvas.changingLayout)
+            verify(Math.abs(view.alignmentPosition-(1-canvas.textAlignment)/2)<.001)
+            wait(400);compare(view.alignmentPosition,1)
+            controller.setSetting("home/layouts/2/alignment","left");wait(400)
+        }
+        function test_layout_offsets_are_persistent_and_animated(){
+            controller.setSetting("home/layout",2);wait(550)
+            const cover=findChild(canvas,"heroArtwork"),meta=findChild(canvas,"trackMetadata")
+            const initial=cover.x,initialY=meta.y
+            controller.setSetting("home/layouts/2/coverX",18)
+            controller.setSetting("home/layouts/2/titleY",14)
+            wait(45);verify(canvas.changingLayout);verify(Math.abs(cover.x-initial)<18)
+            wait(450);verify(Math.abs(cover.x-initial-18)<1);verify(Math.abs(meta.y-initialY-14)<1)
+            controller.setSetting("home/layout",0);wait(400)
+            verify(Math.abs(cover.x+cover.width/2-canvas.width/2)<1)
+            const x=titlePosition()
+            controller.setSetting("home/layouts/0/titleX",18);wait(450)
+            verify(Math.abs(titlePosition()-x-18)<1,"Full-width layout must honor horizontal title offset")
+            controller.setSetting("home/layouts/0/titleX",0)
+            controller.setSetting("home/layouts/2/coverX",0);controller.setSetting("home/layouts/2/titleY",0)
+        }
+        function titlePosition(){return findChild(canvas,"trackTitle").mapToItem(canvas,0,0).x}
+        function test_loading_feedback_fades_and_lyrics_enter(){
+            controller.lyricsLoading=true;wait(220)
+            const feedback=findChild(canvas,"lyricLoadingFeedback")
+            verify(feedback.opacity>0);verify(canvas.contentReveal<.1)
+            controller.lyricsLoading=false;wait(550)
+            compare(feedback.visible,false);compare(canvas.contentReveal,1)
         }
     }
 }

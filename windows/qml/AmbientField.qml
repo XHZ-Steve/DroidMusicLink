@@ -29,7 +29,8 @@ Item {
         interval: field.setting("quality",1)===0?66:field.setting("quality",1)===2?16:33
         running: field.animating
         repeat: true
-        onTriggered: field.phase=(field.phase+interval*.001*field.setting("backgroundFlow",.35))%6283.185307
+        // Common period of the shader harmonics: wrap without a visible jump.
+        onTriggered: field.phase=(field.phase+interval*.001*field.setting("backgroundFlow",.35))%1653.4698176788
     }
     ShaderEffect {
         anchors.fill: parent

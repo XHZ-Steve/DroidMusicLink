@@ -24,10 +24,15 @@ Item {
  property real inactiveOpacity:option("futureOpacity",desktop?.42:.5)
  property string highlightMode:option("highlight","word")
  property bool motion:true
+ property bool clockEnabled:true
  property bool interactive:true
  property real originalFocus:0
  readonly property rect primaryRect:{view.width;view.height;timeline.contentY;timeline.count;const row=timeline.itemAtIndex(line);return row?row.primaryGeometry():Qt.rect(0,height*.45,width,fontSize*1.4)}
  property bool centerCurrentText:false
+ property bool flushAlignment:false
+ property bool alignmentAnimation:true
+ property real alignmentPosition:alignment==="right"?1:alignment==="center"?.5:0
+ Behavior on alignmentPosition{enabled:view.alignmentAnimation&&view.active&&view.motion;NumberAnimation{duration:220;easing.type:Easing.OutCubic}}
  property bool compact:false
  property int compactLines:2
  property bool showTranslation:option("translation",true)
@@ -50,15 +55,17 @@ Item {
  readonly property bool edgeLayer:active&&!compact&&(originalFocus>0||(option("fadeStrength",1)>0&&(option("fadeTop",70)>0||option("fadeBottom",70)>0)))&&GraphicsInfo.api!==GraphicsInfo.Software
  readonly property real topFade:Math.min(option("fadeTop",70),height*.28)
  readonly property real bottomFade:Math.min(option("fadeBottom",70),height*.28)
- readonly property var position:active&&controller?controller.lyricPosition:0
+ readonly property var timelinePosition:active&&controller?controller.lyricPosition:0
+ readonly property var position:clockEnabled?timelinePosition:0
  property string clockSurface:"lyrics-"+Math.random().toString(36).slice(2)
  readonly property font layoutFace:Qt.font({family:fontFamily,pixelSize:fontSize,weight:Math.max(fontWeight,activeWeight),letterSpacing:option("letterSpacing",0),contextFontMerging:true,preferTypoLineMetrics:true,hintingPreference:Font.PreferNoHinting})
  TypographyTokens{id:type}
  function align(value){return value==="right"?Text.AlignRight:value==="center"?Text.AlignHCenter:Text.AlignLeft}
  function plainChunks(row){const text=row.text||"";const parts=text.match(/[\u2e80-\u9fff\u3040-\u30ff]|[^\s\u2e80-\u9fff\u3040-\u30ff]+\s*|\s+/g)||[];return parts.map(function(part){return {text:part,time:row.time||0,end:row.end||0}})}
  function primaryTokens(){const row=timeline.itemAtIndex(line);return row?row.originalTokens():[]}
- function syncClock(){if(controller&&typeof controller.setLyricsVisible==="function")controller.setLyricsVisible(clockSurface,active)}
+ function syncClock(){if(controller&&typeof controller.setLyricsVisible==="function")controller.setLyricsVisible(clockSurface,active&&clockEnabled)}
  function recover(){timeline.userScrolling=false;timeline.cancelFlick();timeline.follow()}
+ onClockEnabledChanged:syncClock()
  onActiveChanged:{syncClock();if(!active){scrollMotion.stop();timeline.positioned=false}else Qt.callLater(timeline.follow)}
  onLineChanged:Qt.callLater(timeline.follow)
  onWidthChanged:Qt.callLater(timeline.follow)
@@ -75,7 +82,11 @@ Item {
   property font metricsFace:face
   required property color inkColor
   property bool highlight:false
+  property real lineShift:0
+  transform:Translate{x:glyph.lineShift}
   TextMetrics{id:measure;font:glyph.metricsFace;text:glyph.value}
+  TextMetrics{id:visibleMeasure;font:glyph.metricsFace;text:glyph.value.replace(/\s+$/,"")}
+  readonly property real visibleAdvance:visibleMeasure.advanceWidth
   width:Math.max(1,Math.min(limit,measure.advanceWidth))
   height:Math.max(view.fontSize*view.option("lineHeight",1.25),layoutSizer.implicitHeight)
   Text{id:layoutSizer;visible:false;width:glyph.width;text:glyph.value;textFormat:Text.PlainText;font:glyph.metricsFace;wrapMode:Text.NoWrap;lineHeight:view.option("lineHeight",1.25)}
@@ -113,6 +124,12 @@ Item {
    }
    return result
   }
+  property var wrappedLineEdges:({})
+  function measureLineEdges(){
+   const edges={}
+   for(let i=0;i<words.children.length;i++){const glyph=words.children[i];if(glyph.objectName!=="lyricGlyph"||glyph.visibleAdvance<=0)continue;const key=String(Math.round(glyph.y));edges[key]=Math.max(edges[key]||0,glyph.x+glyph.visibleAdvance)}
+   wrappedLineEdges=edges
+  }
   function primaryGeometry(){return primary.mapToItem(view,Qt.rect(0,0,primary.width,primary.height))}
   readonly property real primaryCenterOffset:primary.height/2
   // Delegate measurement can finish after the initial follow request. Re-anchor
@@ -128,6 +145,13 @@ Item {
   readonly property real shrink:view.longLine==="shrink"?Math.max(view.option("minimumScale",.65),Math.min(1,layoutWidth/Math.max(1,flowWidth))):1
   readonly property real naturalWidth:Math.max(1,fullMeasure.advanceWidth)
   readonly property real flowWidth:view.longLine==="wrap"?Math.min(layoutWidth,naturalWidth):naturalWidth
+  readonly property real scrollViewportWidth:Math.max(1,Math.min(rowItem.width,view.option("maxWidth",view.desktop?1800:1000)))
+  readonly property bool scrolling:view.longLine==="scroll"&&rowItem.naturalWidth*rowItem.visualScale>rowItem.scrollViewportWidth
+  readonly property real scrollStart:row.words&&row.words.length?row.words[0].time:row.time||0
+  readonly property real scrollEnd:row.words&&row.words.length?row.words[row.words.length-1].end:row.end||scrollStart
+  readonly property real scrollFraction:scrollEnd>scrollStart?Math.max(0,Math.min(1,(view.timelinePosition-scrollStart)/(scrollEnd-scrollStart))):0
+  readonly property real scrollDistance:Math.max(0,(primary.width-view.inkPadding*2)*primary.scale-rowItem.scrollViewportWidth)
+  readonly property real scrollOffset:scrolling?scrollDistance*scrollFraction:0
   readonly property real sourceWidth:view.longLine==="elide"?Math.min(layoutWidth,naturalWidth):flowWidth
   readonly property color baseColor:selected?view.colorOption("unsungColor",view.inactiveColor):view.untimed?view.textColor:past?view.colorOption("pastColor",view.inactiveColor):view.colorOption("futureColor",view.inactiveColor)
   readonly property real stateOpacity:selected||view.untimed?view.option("activeOpacity",1):view.line<0?.78:Math.min(1,(past?view.option("pastOpacity",view.desktop?.5:.58):view.inactiveOpacity)+view.option("nearbyEmphasis",.12)/Math.max(1,Math.abs(index-view.line)))
@@ -140,31 +164,39 @@ Item {
   Behavior on opacity {enabled:view.active&&view.motion;NumberAnimation{duration:view.option("highlightDuration",180)}}
   Column {
    id:body;width:rowItem.layoutWidth*view.reserveScale+view.inkPadding*2
-   x:view.alignment==="center"?(rowItem.width-width)/2:view.alignment==="right"?rowItem.width-width:4
+   x:view.flushAlignment?(rowItem.width-width)*view.alignmentPosition+view.inkPadding*primary.scale*(2*view.alignmentPosition-1):view.alignment==="center"?(rowItem.width-width)/2:view.alignment==="right"?rowItem.width-width:4
    spacing:0
    Item {
-    width:parent.width;height:primary.height*view.reserveScale*rowItem.shrink
+    x:rowItem.scrolling?(rowItem.width-rowItem.scrollViewportWidth)*view.alignmentPosition-body.x:0;width:rowItem.scrolling?rowItem.scrollViewportWidth:parent.width;height:primary.height*view.reserveScale*rowItem.shrink;clip:rowItem.scrolling
+    layer.enabled:view.active&&rowItem.scrolling&&rowItem.selected&&GraphicsInfo.api!==GraphicsInfo.Software
+    layer.smooth:true
+    layer.effect:ShaderEffect{
+     property var source
+     property vector4d fading:Qt.vector4d(0,0,0,1)
+     property vector4d focusWindow:Qt.vector4d(rowItem.scrollOffset>.5?18/Math.max(1,rowItem.scrollViewportWidth):0,rowItem.scrollDistance-rowItem.scrollOffset>.5?18/Math.max(1,rowItem.scrollViewportWidth):0,.001,0)
+     fragmentShader:"qrc:/qt/qml/DroidMediaLink/shaders/lyricfocus.frag.qsb"
+    }
     LyricInk {
      id:primary
-     width:rowItem.sourceWidth+view.inkPadding*2;height:words.height+view.inkPadding*2
-     x:view.alignment==="center"?(parent.width-width)/2:view.alignment==="right"?parent.width-width:0
-     scale:rowItem.visualScale;transformOrigin:view.alignment==="center"?Item.Center:view.alignment==="right"?Item.Right:Item.Left
-     outlineWidth:rowItem.selected?view.outlineWidth:0;outlineColor:view.outlineColor
-     shadow:rowItem.selected&&view.shadow;shadowBlur:view.option("shadowBlur",6);shadowOffset:view.option("shadowOffset",2);shadowColor:view.option("shadowColor","#80000000")
-     glow:rowItem.selected&&view.option("glow",false);glowRadius:view.option("glowRadius",8);glowOpacity:view.option("glowOpacity",.2);glowColor:view.option("glowColor","#d4e7ff")
+     width:(view.longLine==="scroll"?Math.max(1,words.childrenRect.width):rowItem.sourceWidth)+view.inkPadding*2;height:words.height+view.inkPadding*2
+     x:rowItem.scrolling?-rowItem.scrollOffset-view.inkPadding*scale:view.flushAlignment?(parent.width-width*scale)*view.alignmentPosition:view.alignment==="center"?(parent.width-width)/2:view.alignment==="right"?parent.width-width:0
+     scale:rowItem.visualScale;transformOrigin:view.flushAlignment||rowItem.scrolling?Item.TopLeft:view.alignment==="center"?Item.Center:view.alignment==="right"?Item.Right:Item.Left
+     outlineWidth:rowItem.selected&&width<=8192?view.outlineWidth:0;outlineColor:view.outlineColor
+     shadow:rowItem.selected&&view.shadow&&width<=8192;shadowBlur:view.option("shadowBlur",6);shadowOffset:view.option("shadowOffset",2);shadowColor:view.option("shadowColor","#80000000")
+     glow:rowItem.selected&&view.option("glow",false)&&width<=8192;glowRadius:view.option("glowRadius",8);glowOpacity:view.option("glowOpacity",.2);glowColor:view.option("glowColor","#d4e7ff")
      Behavior on scale {enabled:view.active&&view.motion&&view.option("scaleAnimation",true);NumberAnimation{duration:view.option("scaleDuration",280);easing.type:Easing.OutCubic}}
      Flow {
-      id:words;objectName:"lyricWords";x:view.inkPadding;y:view.inkPadding;width:rowItem.sourceWidth
+      id:words;objectName:"lyricWords";onPositioningComplete:rowItem.measureLineEdges();x:view.inkPadding;y:view.inkPadding;width:view.longLine==="scroll"?100000:rowItem.sourceWidth
       Repeater {model:rowItem.chunks
-       Glyph {required property var modelData;value:modelData.text||"";limit:rowItem.sourceWidth;face:rowItem.face;metricsFace:rowItem.measureFace;progress:0;inkColor:rowItem.baseColor}
+       Glyph {required property var modelData;lineShift:view.longLine==="wrap"?(rowItem.sourceWidth-(rowItem.wrappedLineEdges[String(Math.round(y))]||rowItem.sourceWidth))*view.alignmentPosition:0;value:modelData.text||"";limit:rowItem.sourceWidth;face:rowItem.face;metricsFace:rowItem.measureFace;progress:0;inkColor:rowItem.baseColor}
       }
      }
      LyricInk {
       x:0;y:0;width:primary.width;height:primary.height;visible:rowItem.selected&&!view.untimed
-      glow:view.option("wordGlow",false);glowRadius:view.option("glowRadius",8);glowOpacity:view.option("glowOpacity",.2);glowColor:view.option("glowColor","#d4e7ff")
-      Flow {x:view.inkPadding;y:view.inkPadding;width:rowItem.sourceWidth
+      glow:view.option("wordGlow",false)&&width<=8192;glowRadius:view.option("glowRadius",8);glowOpacity:view.option("glowOpacity",.2);glowColor:view.option("glowColor","#d4e7ff")
+      Flow {x:view.inkPadding;y:view.inkPadding;width:view.longLine==="scroll"?100000:rowItem.sourceWidth
        Repeater {model:rowItem.chunks
-        Glyph {required property var modelData;value:modelData.text||"";limit:rowItem.sourceWidth;face:rowItem.face;metricsFace:rowItem.measureFace;highlight:true;inkColor:view.colorOption("sungColor",view.colorOption("color",view.textColor))
+        Glyph {required property var modelData;lineShift:view.longLine==="wrap"?(rowItem.sourceWidth-(rowItem.wrappedLineEdges[String(Math.round(y))]||rowItem.sourceWidth))*view.alignmentPosition:0;value:modelData.text||"";limit:rowItem.sourceWidth;face:rowItem.face;metricsFace:rowItem.measureFace;highlight:true;inkColor:view.colorOption("sungColor",view.colorOption("color",view.textColor))
          progress:!rowItem||!view?0:!rowItem.wordTimed||view.highlightMode==="line"?1:Math.max(0,Math.min(1,(view.position-modelData.time)/Math.max(1,modelData.end-modelData.time)))
          Behavior on progress {enabled:view.motion&&view.active;NumberAnimation{duration:view.option("wordDuration",70);easing.type:Easing.Linear}}
         }
@@ -175,8 +207,8 @@ Item {
    }
    Text {
     visible:view.showTranslation&&(rowItem.row.translation||"").length>0
-    width:parent.width;topPadding:view.option("translationSpacing",6)
-    x:horizontalAlignment===Text.AlignLeft&&view.alignment==="left"?view.inkPadding*primary.scale:horizontalAlignment===Text.AlignRight&&view.alignment==="right"?-view.inkPadding*primary.scale:0
+    width:view.flushAlignment?Math.min(implicitWidth,parent.width):parent.width;topPadding:view.option("translationSpacing",6)
+    x:view.flushAlignment?(rowItem.width-width)*(view.option("translationAlignment","inherit")==="inherit"?view.alignmentPosition:horizontalAlignment===Text.AlignRight?1:horizontalAlignment===Text.AlignHCenter?.5:0)-body.x:horizontalAlignment===Text.AlignLeft&&view.alignment==="left"?view.inkPadding*primary.scale:horizontalAlignment===Text.AlignRight&&view.alignment==="right"?-view.inkPadding*primary.scale:0
     text:rowItem.row.translation||"";textFormat:Text.PlainText;wrapMode:Text.Wrap
     horizontalAlignment:view.align(view.option("translationAlignment","inherit")==="inherit"?view.alignment:view.option("translationAlignment","inherit"))
     color:view.colorOption("translationColor",view.textColor);opacity:view.option("translationOpacity",.78)*(1-view.originalFocus)
@@ -185,8 +217,8 @@ Item {
    }
    Text {
     visible:view.showRomanization&&(rowItem.row.romanization||"").length>0
-    width:parent.width;topPadding:view.option("romanizationSpacing",6)
-    x:horizontalAlignment===Text.AlignLeft&&view.alignment==="left"?view.inkPadding*primary.scale:horizontalAlignment===Text.AlignRight&&view.alignment==="right"?-view.inkPadding*primary.scale:0
+    width:view.flushAlignment?Math.min(implicitWidth,parent.width):parent.width;topPadding:view.option("romanizationSpacing",6)
+    x:view.flushAlignment?(rowItem.width-width)*(view.option("romanizationAlignment","inherit")==="inherit"?view.alignmentPosition:horizontalAlignment===Text.AlignRight?1:horizontalAlignment===Text.AlignHCenter?.5:0)-body.x:horizontalAlignment===Text.AlignLeft&&view.alignment==="left"?view.inkPadding*primary.scale:horizontalAlignment===Text.AlignRight&&view.alignment==="right"?-view.inkPadding*primary.scale:0
     text:rowItem.row.romanization||"";textFormat:Text.PlainText;wrapMode:Text.Wrap
     horizontalAlignment:view.align(view.option("romanizationAlignment","inherit")==="inherit"?view.alignment:view.option("romanizationAlignment","inherit"))
     color:view.colorOption("romanizationColor",view.textColor);opacity:view.option("romanizationOpacity",.62)*(1-view.originalFocus)

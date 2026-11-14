@@ -2087,6 +2087,20 @@
     <message><source>QQ Music covers (experimental)</source><translation>QQ 音乐封面（实验性）</translation></message>
     <message><source>MusicBrainz / CAA covers</source><translation>MusicBrainz / CAA 封面</translation></message>
     <message><source>Online enhancement sends song, artist and album metadata to the enabled cover sources. Experimental sources may become unavailable. Cover images retain their owners' copyrights.</source><translation>联网增强会向已启用的封面来源发送歌曲名、艺术家和专辑。实验性来源可能失效，封面版权仍属于原权利人。</translation></message>
+    <message><source>Album focus positioning</source><translation>专辑聚焦布局位置</translation></message>
+    <message><source>Expanded artwork positioning</source><translation>展开封面布局位置</translation></message>
+    <message><source>Expanded lyrics positioning</source><translation>展开歌词布局位置</translation></message>
+    <message><source>Title and lyrics alignment</source><translation>标题与歌词对齐</translation></message>
+    <message><source>Title and lyrics left aligned</source><translation>标题歌词左靠齐</translation></message>
+    <message><source>Title and lyrics centered</source><translation>标题歌词居中</translation></message>
+    <message><source>Title and lyrics right aligned</source><translation>标题歌词右靠齐</translation></message>
+    <message><source>Title horizontal offset</source><translation>标题水平偏移</translation></message>
+    <message><source>Title vertical offset</source><translation>标题垂直偏移</translation></message>
+    <message><source>Lyrics horizontal offset</source><translation>歌词水平偏移</translation></message>
+    <message><source>Lyrics vertical offset</source><translation>歌词垂直偏移</translation></message>
+    <message><source>Artwork horizontal offset</source><translation>封面水平偏移</translation></message>
+    <message><source>Artwork vertical offset</source><translation>封面垂直偏移</translation></message>
+    <message><source>scroll</source><translation>滚动歌词</translation></message>
 </context>
 <context>
     <name>SettingsPage</name>

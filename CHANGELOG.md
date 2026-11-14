@@ -2,6 +2,8 @@
 
 ## 1.1.0 preview
 
+- Preview4: aligned lyric ink and per-layout title/lyrics/artwork offsets; three alignment presets; timeline-synchronized long-line scrolling, delayed loading feedback and lyric fade-in; more perceptible ambient flow with hidden-window pause.
+
 - Preview3: draggable cover-provider order and independent real-fetch diagnostics; bounded source deadlines, cooldown fallback and transient retries; invalidate incomplete/late-image requests safely.
 
 - Preview2: experimental NetEase and QQ cover sources, configurable priority/enable switches, conservative catalogue matching, source-separated caches and automatic fallback.

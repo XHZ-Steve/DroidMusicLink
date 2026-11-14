@@ -60,6 +60,17 @@ inline QVariantList descriptors(){
  S("lyrics/providers/lrclib/enabled","LRCLIB lyrics",3,0,"bool",true);
  S("home/layout","Home layout",4,0,"enum",0,0,2,1,QVariantList{QVariantMap{{"label",QCoreApplication::translate("Settings","Album focus")},{"value",0}},QVariantMap{{"label",QCoreApplication::translate("Settings","Expanded artwork")},{"value",1}},QVariantMap{{"label",QCoreApplication::translate("Settings","Expanded lyrics")},{"value",2}}});
  S("home/artworkScale","Home artwork scale",4,0,"real",1.0,.55,1.35,.05);
+ const char *layoutGroups[]={QT_TRANSLATE_NOOP("Settings","Album focus positioning"),QT_TRANSLATE_NOOP("Settings","Expanded artwork positioning"),QT_TRANSLATE_NOOP("Settings","Expanded lyrics positioning")};
+ for(int layout=0;layout<3;++layout){
+  const auto prefix="home/layouts/"+QString::number(layout)+"/";
+  add(prefix+"alignment",QT_TRANSLATE_NOOP("Settings","Title and lyrics alignment"),4,0,"enum",layout==0?"center":"left",0,1,1,QVariantList{
+   QVariantMap{{"label",QCoreApplication::translate("Settings","Title and lyrics left aligned")},{"value","left"}},
+   QVariantMap{{"label",QCoreApplication::translate("Settings","Title and lyrics centered")},{"value","center"}},
+   QVariantMap{{"label",QCoreApplication::translate("Settings","Title and lyrics right aligned")},{"value","right"}}});
+  const QList<QPair<QString,const char*>> axes{{"titleX",QT_TRANSLATE_NOOP("Settings","Title horizontal offset")},{"titleY",QT_TRANSLATE_NOOP("Settings","Title vertical offset")},{"lyricsX",QT_TRANSLATE_NOOP("Settings","Lyrics horizontal offset")},{"lyricsY",QT_TRANSLATE_NOOP("Settings","Lyrics vertical offset")},{"coverX",QT_TRANSLATE_NOOP("Settings","Artwork horizontal offset")},{"coverY",QT_TRANSLATE_NOOP("Settings","Artwork vertical offset")}};
+  for(auto axis:axes)add(prefix+axis.first,axis.second,4,0,"number",0,-180,180,2);
+  for(int i=out.size()-7;i<out.size();++i){auto row=out[i].toMap();row["subgroup"]="homeLayout"+QString::number(layout);row["subgroupLabel"]=QCoreApplication::translate("Settings",layoutGroups[layout]);row["tags"]="home layout artwork title lyrics offset position alignment 主页 布局 封面 标题 歌词 偏移 对齐";out[i]=row;}
+ }
  S("dock/shape","Playback dock shape",4,0,"enum","rounded",0,1,1,options({"rounded","capsule"}));
  S("dock/playStyle","Play button style",4,0,"enum","solid",0,1,1,options({"solid","water"}));
  S("desktopLyrics/windowWidth","Lyric window width",3,3,"int",800,280,4096,10,{},true);
@@ -90,6 +101,7 @@ inline QVariantList descriptors(){
  action("resetSettings","Restore defaults",5,1);action("clearLyricsCache","Clear lyrics cache",5,1);action("exportSettings","Export settings",5,1);action("importSettings","Import settings",5,1);
  action("checkUpdates","Check updates",5,2);action("exportDiagnostics","Export diagnostics",5,3);
  out+=LyricStyleSettings::descriptors(fonts);
+ for(auto &value:out){auto row=value.toMap();if(row["key"]=="lyrics/alignment"){row["hidden"]=true;value=row;}}
  const QList<QPair<QString,QString>> aliases{{"font","字体 ziti"},{"size","字号 大小 zihao daxiao"},{"weight","字重 粗细 zizhong cuxi"},{"color","颜色 填充 yanse tianchong"},{"opacity","透明度 toumingdu"},{"scale","缩放 放大 suofang fangda"},{"letterspacing","字距 ziju"},{"linespacing","行距 hangju"},{"spacing","间距 jianju"},{"align","对齐 duiqi"},{"translation","翻译 译文 fanyi yiwen"},{"romanization","罗马音 luomayin"},{"shadow","阴影 yinying"},{"glow","辉光 huiguang"},{"outline","描边 miaobian"},{"scroll","滚动 gundong"},{"focus","焦点 jiaodian"},{"fade","渐隐 jianyin"},{"word","逐字 zhuzi"},{"width","宽度 kuandu"},{"height","高度 gaodu"},{"render","渲染 xuanran"},{"provider","来源 优先级 laiyuan youxianji"},{"language","语言 yuyan"},{"autostart","开机 自启 kaiji ziqi"},{"shortcut","快捷键 kuaijiejian"},{"volume","音量 yinliang"},{"reconnect","重连 chonglian"},{"cache","缓存 huancun"},{"theme","主题 zhuti"},{"background","背景 beijing"},{"motion","动画 donghua"}};
  for(auto &value:out){auto row=value.toMap();const auto key=row["key"].toString().toLower();QString tags=row.value("tags").toString();if(key.startsWith("lyrics/"))tags.remove("zhuomian");for(const auto &alias:aliases)if(key.contains(alias.first))tags+=" "+alias.second;row["tags"]=tags;value=row;}
 

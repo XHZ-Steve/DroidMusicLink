@@ -10,5 +10,10 @@ void main(){
  float focusTop=smoothstep(focusWindow.x-focusWindow.z,focusWindow.x,qt_TexCoord0.y);
  float focusBottom=1.0-smoothstep(focusWindow.y,focusWindow.y+focusWindow.z,qt_TexCoord0.y);
  mask*=mix(1.0,focusTop*focusBottom,focusWindow.w);
+ if(fading.w>0.0){
+  float left=focusWindow.x>0.0?smoothstep(0.0,focusWindow.x,qt_TexCoord0.x):1.0;
+  float right=focusWindow.y>0.0?smoothstep(0.0,focusWindow.y,1.0-qt_TexCoord0.x):1.0;
+  mask*=left*right;
+ }
  fragColor=texture(source,qt_TexCoord0)*mask*qt_Opacity;
 }

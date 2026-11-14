@@ -20,6 +20,19 @@ Item {
     readonly property real artworkScale:{settingsRevision;return Math.max(.55,Math.min(1.35,controller.setting("home/artworkScale",1)))}
     readonly property real artworkShare:Math.min(.6,.46+Math.max(0,artworkScale-1)*.4)
     readonly property bool split: mode!==0 && width>780 && width/Math.max(1,height)>1.12
+    readonly property string layoutKey:"home/layouts/"+mode+"/"
+    readonly property var layoutConfiguration:{settingsRevision;return {alignment:controller.setting(layoutKey+"alignment",split?controller.setting("lyrics/alignment","left"):"center"),titleX:controller.setting(layoutKey+"titleX",0),titleY:controller.setting(layoutKey+"titleY",0),lyricsX:controller.setting(layoutKey+"lyricsX",0),lyricsY:controller.setting(layoutKey+"lyricsY",0),coverX:controller.setting(layoutKey+"coverX",0),coverY:controller.setting(layoutKey+"coverY",0)}}
+    readonly property string layoutAlignment:layoutConfiguration.alignment
+    readonly property real targetTextAlignment:layoutAlignment==="left"?1:layoutAlignment==="right"?-1:0
+    property real contentReveal:0
+    property bool resettingLyrics:false
+    readonly property bool loadingLyrics:!!controller.lyricsLoading&&displayingLyrics
+    Timer{id:loadingDelay;interval:140;onTriggered:loadingFeedback.show=canvas.loadingLyrics}
+    onTrackIdentityChanged:if(ready){resettingLyrics=true;contentReveal=0;cancelTransitionForResize();Qt.callLater(function(){resettingLyrics=false;showLoadedLyrics()})}
+    function showLoadedLyrics(){contentReveal=controller.lyrics.length&&!loadingLyrics?1:0}
+    Connections{target:canvas.controller;ignoreUnknownSignals:true;function onLyricsChanged(){canvas.showLoadedLyrics()}}
+    onLoadingLyricsChanged:{if(loadingLyrics)loadingDelay.restart();else{loadingDelay.stop();loadingFeedback.show=false}showLoadedLyrics()}
+    Behavior on contentReveal{enabled:!canvas.resettingLyrics;NumberAnimation{duration:canvas.motion&&canvas.active?240:0;easing.type:Easing.OutCubic}}
     readonly property bool lyricsMode: mode===2
     readonly property bool displayingLyrics: lyricsEnabled && mode!==1
     readonly property string trackIdentity:controller.title+"\u0000"+controller.artist+"\u0000"+controller.appName
@@ -30,6 +43,7 @@ Item {
     property real lyricFocus:0
     property real transitionProgress: 1
     property real textAlignment: split?1:0
+    property real restingAlignment:0
     property var fromGeometry: ({})
     property var toGeometry: ({})
     property int transitionGeneration: 0
@@ -62,8 +76,17 @@ Item {
         }
         return Qt.rect(mix(a.x,b.x),y,mix(a.width,b.width),mix(a.height,b.height))
     }
+    function snapshotTokens(){return expandedLyrics.primaryTokens().map(function(token){const copy=Object.assign({},token);copy.rect=expandedLyrics.mapToItem(homeLyrics,token.rect);copy.scale=token.scale*expandedLyrics.scale;return copy})}
+    function alignedRect(rect,dx,dy,content,lyric){
+        const anchor=(1-targetTextAlignment)/2
+        const trim=content?Math.min(Math.abs(dx)*2,Math.max(0,rect.width-80)):0
+        const vertical=lyric?Math.min(Math.abs(dy)*2,Math.max(0,rect.height-60)):0
+        const w=rect.width-trim,h=rect.height-vertical
+        const focus=lyricsMode?controller.setting("lyrics/focus",.45):.5
+        return Qt.rect(Math.max(0,Math.min(Math.max(0,width-w),rect.x+dx+trim*anchor)),Math.max(0,Math.min(Math.max(0,height-h),rect.y+dy+vertical*focus)),w,h)
+    }
     function freezeGeometry(){
-        const current={cover:rectOf(artwork),metadata:rectOf(metadata),lyrics:homeLyrics.opacity>.001?rectOf(homeLyrics):Qt.rect(metadata.x,Math.max(metadata.y+metadata.height+16,artwork.y+artwork.height+14),metadata.width,76),expansion:homeLyrics.expansion,primary:expandedLyrics.primaryRect,tokens:expandedLyrics.primaryTokens(),expandedSplit:homeLyrics.expandedSplit,alignment:textAlignment,titleX:metadata.x+titleLabel.x,titleHeight:titleLabel.height,artistX:metadata.x+artistLabel.x,sourceX:metadata.x+sourceLabel.x,lyricOpacity:homeLyrics.opacity}
+        const current={cover:rectOf(artwork),metadata:rectOf(metadata),lyrics:homeLyrics.opacity>.001?rectOf(homeLyrics):Qt.rect(metadata.x,Math.max(metadata.y+metadata.height+16,artwork.y+artwork.height+14),metadata.width,76),expansion:homeLyrics.expansion,primary:expandedLyrics.mapToItem(homeLyrics,expandedLyrics.primaryRect),tokens:snapshotTokens(),expandedSplit:homeLyrics.expandedSplit,alignment:textAlignment,titleX:metadata.x+titleLabel.x,titleHeight:titleLabel.height,artistX:metadata.x+artistLabel.x,sourceX:metadata.x+sourceLabel.x,lyricOpacity:homeLyrics.opacity}
         layoutMotion.stop();fromGeometry=current;toGeometry=current
         transitionProgress=0;changingLayout=true
     }
@@ -73,11 +96,11 @@ Item {
         Qt.callLater(function(){
             if(generation!==canvas.transitionGeneration)return
             slots.ensurePolished()
-            toGeometry={cover:coverTarget,metadata:metadataTarget,lyrics:lyricTarget,expansion:lyricsMode?1:0,expandedSplit:split,alignment:split?1:0,titleX:textTargetX(titleLabel),titleHeight:titleMeasure.implicitHeight,artistX:textTargetX(artistLabel),sourceX:textTargetX(sourceLabel),lyricOpacity:displayingLyrics&&controller.lyrics.length?1:0}
-            if(motion)layoutMotion.start();else{transitionProgress=1;changingLayout=false}
+            toGeometry={cover:coverTarget,metadata:metadataTarget,lyrics:lyricTarget,expansion:lyricsMode?1:0,expandedSplit:split,alignment:targetTextAlignment,titleX:textTargetX(titleLabel),titleHeight:titleMeasure.implicitHeight,artistX:textTargetX(artistLabel),sourceX:textTargetX(sourceLabel),lyricOpacity:displayingLyrics&&controller.lyrics.length?1:0}
+            if(motion)layoutMotion.start();else{restingAlignment=targetTextAlignment;transitionProgress=1;changingLayout=false}
         })
     }
-    function textTargetX(label){return metadataTarget.x+(metadataTarget.width-Math.min(label.implicitWidth,metadataTarget.width))*(split?0:.5)}
+    function textTargetX(label){return metadataTarget.x+(metadataTarget.width-Math.min(label.implicitWidth,metadataTarget.width))*((1-targetTextAlignment)/2)}
     function horizontalProgress(){const p=transitionProgress;return Math.abs(toGeometry.cover.x-fromGeometry.cover.x)>1?(toGeometry.cover.x<fromGeometry.cover.x?1-Math.pow(1-p,6):Math.pow(p,6)):p}
     function textX(label,key){
         if(!changingLayout)return (metadata.width-label.width)*(1-textAlignment)/2
@@ -86,7 +109,7 @@ Item {
     }
     function beginNextLayout(){freezeGeometry();controller.setSetting("home/layout",(mode+1)%3)}
     function nextLayout(){
-        if(focusMotion.running)return
+        if(focusMotion.running||changingLayout)return
         if(lyricsMode&&controller.lyrics.length&&motion&&active&&!changingLayout){lyricFocus=0;focusMotion.start();beginNextLayout();return}
         beginNextLayout()
     }
@@ -96,12 +119,13 @@ Item {
     onWidthChanged:cancelTransitionForResize()
     onHeightChanged:cancelTransitionForResize()
     onActiveChanged:if(!active)cancelTransitionForResize()
-    onTrackIdentityChanged:if(ready)cancelTransitionForResize()
-    function cancelTransitionForResize(){if(!ready)return;++transitionGeneration;focusMotion.stop();layoutMotion.stop();lyricFocus=0;transitionProgress=1;changingLayout=false;Qt.callLater(polishLayout)}
+    readonly property string layoutSignature:JSON.stringify(layoutConfiguration)
+    onLayoutSignatureChanged:if(ready){if(!active)cancelTransitionForResize();else{freezeGeometry();scheduleTransition()}}
+    function cancelTransitionForResize(){if(!ready)return;restingAlignment=targetTextAlignment;++transitionGeneration;focusMotion.stop();layoutMotion.stop();lyricFocus=0;transitionProgress=1;changingLayout=false;Qt.callLater(polishLayout)}
     function polishLayout(){slots.ensurePolished()}
-    Component.onCompleted:ready=true
-    NumberAnimation{id:layoutMotion;target:canvas;property:"transitionProgress";from:0;to:1;duration:320;easing.type:Easing.InOutCubic;onFinished:{canvas.changingLayout=false;canvas.lyricFocus=0}}
-    Binding{target:canvas;property:"textAlignment";value:canvas.changingLayout?canvas.mix(canvas.fromGeometry.alignment,canvas.toGeometry.alignment):canvas.split?1:0}
+    Component.onCompleted:{restingAlignment=targetTextAlignment;ready=true;showLoadedLyrics()}
+    NumberAnimation{id:layoutMotion;target:canvas;property:"transitionProgress";from:0;to:1;duration:320;easing.type:Easing.InOutCubic;onFinished:{canvas.restingAlignment=canvas.toGeometry.alignment;canvas.changingLayout=false;canvas.lyricFocus=0}}
+    Binding{target:canvas;property:"textAlignment";value:canvas.changingLayout?canvas.mix(canvas.fromGeometry.alignment,canvas.toGeometry.alignment):canvas.restingAlignment}
     TypographyTokens{id:typography}
     DesignTokens{id:tokens;light:canvas.light;motion:canvas.motion;accent:canvas.accent}
     GridLayout {
@@ -132,9 +156,12 @@ Item {
             visible:canvas.displayingLyrics
         }
     }
-    readonly property rect coverTarget:Qt.rect(coverSlot.x+(coverSlot.width-artworkExtent)/2,coverSlot.y+(coverSlot.height-artworkExtent)/2,artworkExtent,artworkExtent)
-    readonly property rect metadataTarget:Qt.rect(metadataSlot.x,split&&!lyricsMode?coverSlot.y+(coverSlot.height-metadata.implicitHeight)/2:metadataSlot.y,metadataSlot.width,metadata.implicitHeight)
-    readonly property rect lyricTarget:Qt.rect(lyricSlot.x,lyricSlot.y,lyricSlot.width,Math.max(1,lyricSlot.height))
+    readonly property rect rawCoverTarget:Qt.rect(coverSlot.x+(coverSlot.width-artworkExtent)/2,coverSlot.y+(coverSlot.height-artworkExtent)/2,artworkExtent,artworkExtent)
+    readonly property rect rawMetadataTarget:Qt.rect(metadataSlot.x,split&&!lyricsMode?coverSlot.y+(coverSlot.height-metadata.implicitHeight)/2:metadataSlot.y,metadataSlot.width,metadata.implicitHeight)
+    readonly property rect rawLyricTarget:Qt.rect(lyricSlot.x,lyricSlot.y,lyricSlot.width,Math.max(1,lyricSlot.height))
+    readonly property rect coverTarget:alignedRect(rawCoverTarget,layoutConfiguration.coverX,layoutConfiguration.coverY)
+    readonly property rect metadataTarget:alignedRect(rawMetadataTarget,layoutConfiguration.titleX,layoutConfiguration.titleY,true,false)
+    readonly property rect lyricTarget:alignedRect(rawLyricTarget,layoutConfiguration.lyricsX,layoutConfiguration.lyricsY,true,true)
     readonly property rect coverGeometry:geometry("cover",coverTarget)
     readonly property rect metadataGeometry:geometry("metadata",metadataTarget)
     readonly property rect lyricGeometry:geometry("lyrics",lyricTarget)
@@ -154,7 +181,7 @@ Item {
         width:canvas.metadataGeometry.width;height:canvas.metadataGeometry.height
         implicitHeight:titleMeasure.implicitHeight+(artistLabel.visible?artistLabel.implicitHeight+7:0)+(sourceLabel.visible?sourceLabel.implicitHeight+7:0)+(connectButton.visible?43:0)
         Text {
-            id:titleMeasure;visible:false;width:metadataSlot.width;text:titleLabel.text
+            id:titleMeasure;visible:false;width:Math.max(80,metadataSlot.width-2*Math.abs(canvas.layoutConfiguration.titleX));text:titleLabel.text
             font:titleLabel.font;wrapMode:Text.Wrap;maximumLineCount:2;renderType:Text.NativeRendering
         }
         Label {
@@ -191,6 +218,7 @@ Item {
         readonly property bool returning:canvas.lyricFocus>0||focusMotion.running
         readonly property real travel:canvas.changingLayout?canvas.transitionProgress:0
         readonly property real morph:returning?Math.max(0,Math.min(1,(travel-.2)/.8)):1-expansion
+        // compactLyrics.primaryRect is the final home-local template (x/y=0, scale=1).
         readonly property real primaryX:returning&&canvas.changingLayout?canvas.mix(canvas.fromGeometry.primary.x,compactLyrics.primaryRect.x):0
         readonly property real primaryY:returning&&canvas.changingLayout?canvas.mix(canvas.fromGeometry.primary.y,compactLyrics.primaryRect.y):0
         readonly property real sizeRatio:.85/(expandedSplit?1:.9)
@@ -202,14 +230,15 @@ Item {
             id:expandedLyrics;objectName:"expandedHomeLyrics"
             width:homeLyrics.returning&&canvas.changingLayout?canvas.fromGeometry.lyrics.width:parent.width
             height:homeLyrics.returning&&canvas.changingLayout?canvas.fromGeometry.lyrics.height:parent.height
-            x:homeLyrics.returning&&canvas.changingLayout?homeLyrics.primaryX-primaryRect.x*scale:0
+            x:homeLyrics.returning&&canvas.changingLayout?homeLyrics.primaryX-primaryRect.x*scale:(parent.width-width*scale)*(1-canvas.textAlignment)/2
             y:homeLyrics.returning&&canvas.changingLayout?homeLyrics.primaryY-primaryRect.y*scale:0
-            controller:canvas.controller;settingsRevision:canvas.settingsRevision;settingsPrefix:"lyrics"
+            controller:canvas.controller;settingsRevision:canvas.settingsRevision;settingsPrefix:"lyrics";flushAlignment:true;alignmentAnimation:false
+            alignmentPosition:(1-canvas.textAlignment)/2
             compact:false;originalFocus:canvas.lyricFocus
-            opacity:homeLyrics.returning&&canvas.changingLayout?1-canvas.blendIn(canvas.transitionProgress/.22):homeLyrics.expansion;visible:opacity>.001||homeLyrics.returning
+            opacity:canvas.contentReveal*(homeLyrics.returning&&canvas.changingLayout?1-canvas.blendIn(canvas.transitionProgress/.22):homeLyrics.expansion);visible:opacity>.001||homeLyrics.returning
             transformOrigin:Item.TopLeft
             scale:homeLyrics.sizeRatio+(1-homeLyrics.sizeRatio)*homeLyrics.expansion
-            configuration:({alignment:homeLyrics.expandedSplit?canvas.controller.setting("lyrics/alignment","left"):"center",fontSize:canvas.controller.setting("lyrics/fontSize",28)*(homeLyrics.expandedSplit?1:.9)})
+            configuration:({alignment:canvas.layoutAlignment,fontSize:canvas.controller.setting("lyrics/fontSize",28)*(homeLyrics.expandedSplit?1:.9)})
             textColor:canvas.textColor;inactiveColor:canvas.secondaryColor;motion:canvas.motion&&!canvas.changingLayout
             onSeekRequested:function(position){canvas.seekRequested(position)}
         }
@@ -217,18 +246,20 @@ Item {
             id:compactLyrics;objectName:"compactHomeLyrics"
             width:homeLyrics.returning&&canvas.changingLayout?canvas.toGeometry.lyrics.width:parent.width
             height:homeLyrics.returning&&canvas.changingLayout?canvas.toGeometry.lyrics.height:parent.height
-            x:homeLyrics.returning&&canvas.changingLayout?homeLyrics.primaryX-primaryRect.x*scale:0
+            x:homeLyrics.returning&&canvas.changingLayout?homeLyrics.primaryX-primaryRect.x*scale:(parent.width-width*scale)*(1-canvas.textAlignment)/2
             y:homeLyrics.returning&&canvas.changingLayout?homeLyrics.primaryY-primaryRect.y*scale:0
-            controller:canvas.controller;settingsRevision:canvas.settingsRevision;settingsPrefix:"lyrics"
-            compact:true;compactLines:1;opacity:homeLyrics.returning?canvas.blendIn((canvas.transitionProgress-.72)/.28):1-homeLyrics.expansion;visible:homeLyrics.returning||opacity>.001
+            controller:canvas.controller;settingsRevision:canvas.settingsRevision;settingsPrefix:"lyrics";flushAlignment:true;alignmentAnimation:false
+            alignmentPosition:homeLyrics.returning?(1-canvas.targetTextAlignment)/2:(1-canvas.textAlignment)/2
+            clockEnabled:opacity>.001;motion:canvas.motion&&!canvas.changingLayout&&opacity>.001
+            compact:true;compactLines:1;opacity:canvas.contentReveal*(homeLyrics.returning?canvas.blendIn((canvas.transitionProgress-.72)/.28):1-homeLyrics.expansion);visible:canvas.displayingLyrics
             transformOrigin:Item.TopLeft
             scale:1+(1/homeLyrics.sizeRatio-1)*homeLyrics.expansion
-            configuration:({fontSize:canvas.controller.setting("lyrics/fontSize",28)*.85,activeWeight:canvas.controller.setting("lyrics/activeWeight",500),longLine:"elide",alignment:"center",translation:false,romanization:false,autoScroll:true})
-            textColor:canvas.textColor;inactiveColor:canvas.secondaryColor;motion:canvas.motion&&!canvas.changingLayout
+            configuration:({fontSize:canvas.controller.setting("lyrics/fontSize",28)*.85,activeWeight:canvas.controller.setting("lyrics/activeWeight",500),longLine:canvas.controller.setting("lyrics/longLine","wrap")==="scroll"?"scroll":"elide",alignment:canvas.layoutAlignment,translation:false,romanization:false,autoScroll:true})
+            textColor:canvas.textColor;inactiveColor:canvas.secondaryColor
             onSeekRequested:function(position){canvas.seekRequested(position)}
         }
         Item {
-            id:originalMorph;objectName:"originalLyricMorph";anchors.fill:parent
+            id:originalMorph;objectName:"originalLyricMorph";anchors.fill:parent;clip:true
             opacity:canvas.blendIn(canvas.transitionProgress/.22)*(1-canvas.blendIn((canvas.transitionProgress-.72)/.28))
             visible:homeLyrics.returning&&canvas.changingLayout
             Repeater {
@@ -260,9 +291,17 @@ Item {
             }
         }
     }
+    Item{
+        id:loadingFeedback;objectName:"lyricLoadingFeedback"
+        property bool show:false
+        x:canvas.lyricTarget.x;y:canvas.lyricTarget.y;width:canvas.lyricTarget.width;height:Math.min(80,canvas.lyricTarget.height)
+        opacity:show?1:0;visible:opacity>.001
+        Behavior on opacity{NumberAnimation{duration:canvas.motion&&canvas.active?180:0}}
+        BusyIndicator{anchors.horizontalCenter:parent.horizontalCenter;anchors.verticalCenter:parent.verticalCenter;width:28;height:28;running:loadingFeedback.visible&&canvas.active;Accessible.name:qsTr("Matching lyrics…")}
+    }
     RowLayout {
         x:lyricSlot.x;y:lyricSlot.y;width:lyricSlot.width;height:42
-        visible:canvas.displayingLyrics&&!canvas.controller.lyrics.length&&canvas.controller.title.length>0
+        visible:canvas.displayingLyrics&&!canvas.controller.lyrics.length&&!canvas.loadingLyrics&&canvas.controller.title.length>0
         Label{Layout.fillWidth:true;text:canvas.controller.lyricsLoading?qsTr("Matching lyrics…"):qsTr("No lyrics");color:canvas.secondaryColor;horizontalAlignment:Text.AlignLeft}
         Button{text:qsTr("Match lyrics");flat:true;enabled:!canvas.controller.lyricsLoading;onClicked:canvas.matchRequested()}
     }

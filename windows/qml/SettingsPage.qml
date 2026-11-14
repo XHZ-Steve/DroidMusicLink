@@ -92,7 +92,7 @@ Item {
     readonly property var searchResults: {
         const query=searchField.text.trim().toLocaleLowerCase()
         if(!query)return []
-        let rows=catalog.slice()
+        let rows=catalog.filter(function(row){return !row.hidden})
         if(controller)controller.appearanceDescriptors.forEach(function(row){rows.push({key:"appearance/"+row.key,label:row.label,group:4,section:row.group==="background"?1:2,advanced:row.advanced,tags:row.tags||""})})
         providerRows.forEach(function(row){rows.push({key:row.enabledKey||"lyrics/providers/"+row.id+"/enabled",label:row.name,group:3,section:0,tags:providerCapabilities(row.capabilities)+" provider source priority 歌词源 来源 优先级"})})
         for(let group=0;group<groupNames.length;group++){
@@ -138,7 +138,7 @@ Item {
     function expandAdvanced(){setAdvanced(activeGroup,activeSection,true)}
     function toggleAdvanced(){setAdvanced(activeGroup,activeSection,!advancedExpanded)}
     function rowsFor(group,section){
-        return catalog.filter(function(row){return row.group===group&&row.section===section&&(!row.advanced||advancedFor(group,section))&&row.key!=="lyrics/providerPriority"&&row.key!=="cover/source"&&!(String(row.key).indexOf("cover/providers/")===0&&String(row.key).endsWith("/enabled"))&&!(String(row.key).indexOf("lyrics/providers/")===0&&String(row.key).endsWith("/enabled"))})
+        return catalog.filter(function(row){return !row.hidden&&row.group===group&&row.section===section&&(!row.advanced||advancedFor(group,section))&&row.key!=="lyrics/providerPriority"&&row.key!=="cover/source"&&!(String(row.key).indexOf("cover/providers/")===0&&String(row.key).endsWith("/enabled"))&&!(String(row.key).indexOf("lyrics/providers/")===0&&String(row.key).endsWith("/enabled"))})
     }
     function subgroupsFor(group,section){
         const keys=[];catalog.forEach(function(row){if(row.group===group&&row.section===section&&row.subgroup&&keys.indexOf(row.subgroup)<0)keys.push(row.subgroup)})
@@ -204,9 +204,10 @@ Item {
         const key=String(page.activeGroup)
         if(key!==page.scrollKey){if(!page.restoringHistory)page.navigationHistory=page.navigationHistory.concat([page.scrollKey]).slice(-40);page.scrollKey=key}
         page.restoringHistory=false
+        if(page.highlightedKey){jumpTimer.restart();return}
         if(contentScroll.contentItem)contentScroll.contentItem.contentY=Math.max(0,Math.min(page.scrollPositions[key]||0,Math.max(0,contentScroll.contentItem.contentHeight-contentScroll.contentItem.height)))
     }}
-    Timer{id:sectionJump;interval:0;onTriggered:Qt.callLater(function(){page.revealItem(page.findNamed(contentColumn,"section-"+page.activeGroup+"/"+page.activeSection))})}
+    Timer{id:sectionJump;interval:0;onTriggered:Qt.callLater(function(){if(page.highlightedKey){jumpTimer.restart();return}page.revealItem(page.findNamed(contentColumn,"section-"+page.activeGroup+"/"+page.activeSection))})}
     Shortcut{sequence:"Alt+Left";enabled:page.visible&&page.navigationHistory.length>0;onActivated:page.goBack()}
     function runAction(row){
         const action=row.action||row.key
@@ -518,6 +519,7 @@ Item {
             Layout.fillWidth:true
             property real reveal:subgroup.collapsed?0:1
             implicitHeight:subgroupRows.implicitHeight*reveal;opacity:reveal;visible:reveal>0;clip:reveal<1
+            onRevealChanged:if(reveal===1&&page.highlightedKey)jumpTimer.restart()
             Behavior on reveal{NumberAnimation{duration:tokens.fast;easing.type:Easing.OutCubic}}
             ColumnLayout {
                 id:subgroupRows;x:14;width:Math.max(0,parent.width-14);height:implicitHeight;spacing:3
@@ -552,6 +554,7 @@ Item {
             Layout.fillWidth:true
             property real reveal:sectionBlock.collapsed?0:1
             implicitHeight:sectionInner.implicitHeight*reveal;opacity:reveal;visible:reveal>0;clip:reveal<1
+            onRevealChanged:if(reveal===1&&page.highlightedKey)jumpTimer.restart()
             Behavior on reveal{NumberAnimation{duration:tokens.fast;easing.type:Easing.OutCubic}}
             ColumnLayout {
                 id:sectionInner;x:16;width:Math.max(0,parent.width-16);height:implicitHeight;spacing:3

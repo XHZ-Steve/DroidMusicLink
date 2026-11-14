@@ -30,11 +30,13 @@ void main() {
     float aspect=max(geometry.x,1.)/max(geometry.y,1.);
     vec2 metric=vec2(sqrt(aspect),inversesqrt(aspect));
     float radius=.42*atmosphere.y;
-    float t=phase*.055;
-    vec2 drift=vec2(sin(t),cos(t*.73))*.045;
-    float a=region(uv,vec2(.14,.25)+drift,metric,radius);
-    float b=region(uv,vec2(.93,.80)-drift,metric,radius*.95);
-    float c=region(uv,vec2(.68,.12)+drift.yx*.6,metric,radius*.65)*.52;
+    // phase advances in seconds * configured speed. At 2x the lobes now
+    // travel visibly in a few seconds; the default remains a slow drift.
+    float t=phase*.38;
+    vec2 drift=vec2(sin(t),sin(t*.73))*.14;
+    float a=region(uv,vec2(.20,.28)+drift,metric,radius*(1.+.10*sin(t*.63)));
+    float b=region(uv,vec2(.82,.73)+vec2(sin(t*.81),-sin(t*.67))*.16,metric,radius*.95);
+    float c=region(uv,vec2(.64,.20)+vec2(-sin(t*.91),sin(t*.57))*.18,metric,radius*.72)*(.52+.08*sin(t*.7));
     // Local colour ownership prevents opposite hues becoming a flat grey field.
     vec3 weights=pow(vec3(a,b,c),vec3(1.35));
     float total=weights.x+weights.y+weights.z;
